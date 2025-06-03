@@ -168,6 +168,7 @@ class SingleRealsense(mp.Process):
 
     # ========= context manager ===========
     def __enter__(self):
+        print("entering")
         self.start()
         return self
     
@@ -178,8 +179,11 @@ class SingleRealsense(mp.Process):
     def start(self, wait=True, put_start_time=None):
         self.put_start_time = put_start_time
         super().start()
+        print("WAITING true/false", wait)
         if wait:
+            print("waiting for start_wait")
             self.start_wait()
+            print("start_wait finished")
     
     def stop(self, wait=True):
         self.stop_event.set()
@@ -187,6 +191,7 @@ class SingleRealsense(mp.Process):
             self.end_wait()
 
     def start_wait(self):
+        print(self.ready_event.is_set())
         self.ready_event.wait()
     
     def end_wait(self):

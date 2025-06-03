@@ -76,6 +76,7 @@ class RealEnv:
             shm_manager.start()
         if camera_serial_numbers is None:
             camera_serial_numbers = SingleRealsense.get_connected_devices_serial()
+            print(f"camera serial numbers: {camera_serial_numbers}")
 
         color_tf = get_image_transform(
             input_res=video_capture_resolution,
@@ -151,14 +152,17 @@ class RealEnv:
             )
 
         cube_diag = np.linalg.norm([1,1,1])
-        j_init = np.array([0,-90,-90,-90,90,0]) / 180 * np.pi
+        j_init = np.array([-144,-120,-101,-50,90,-90]) / 180 * np.pi
         if not init_joints:
             j_init = None
+        print(f"j_init: {j_init}")
+        
+        print("reached RTDE controller init")
 
         robot = RTDEInterpolationController(
             shm_manager=shm_manager,
             robot_ip=robot_ip,
-            frequency=125, # UR5 CB3 RTDE
+            frequency=500, # UR5 CB3 RTDE
             lookahead_time=0.1,
             gain=300,
             max_pos_speed=max_pos_speed*cube_diag,
@@ -196,14 +200,18 @@ class RealEnv:
         self.stage_accumulator = None
 
         self.start_time = None
+
+        print("RealEnv initialized 1 !")
     
     # ======== start-stop API =============
     @property
     def is_ready(self):
+        # print(f"robot ready : {self.robot.is_ready}")
         return self.realsense.is_ready and self.robot.is_ready
     
     def start(self, wait=True):
         self.realsense.start(wait=False)
+        print("reached robot.start")
         self.robot.start(wait=False)
         if self.multi_cam_vis is not None:
             self.multi_cam_vis.start(wait=False)
@@ -220,8 +228,11 @@ class RealEnv:
             self.stop_wait()
 
     def start_wait(self):
+        print("start_wait line 1")
         self.realsense.start_wait()
+        print("start_wait line 2")
         self.robot.start_wait()
+        print("start_wait line 3")
         if self.multi_cam_vis is not None:
             self.multi_cam_vis.start_wait()
     
@@ -233,6 +244,7 @@ class RealEnv:
 
     # ========= context manager ===========
     def __enter__(self):
+        print("executing __enter__ from real_env via context manager")
         self.start()
         return self
     

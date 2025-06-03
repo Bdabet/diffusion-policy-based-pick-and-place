@@ -199,6 +199,7 @@ class RTDEInterpolationController(mp.Process):
             'target_pose': pose,
             'target_time': target_time
         }
+        # print(f"[RTDEPositionalController] Schedule waypoint at {target_time} with pose {pose}")
         self.input_queue.put(message)
 
     # ========= receive APIs =============
@@ -238,6 +239,7 @@ class RTDEInterpolationController(mp.Process):
             
             # init pose
             if self.joints_init is not None:
+                print("Init pose")
                 assert rtde_c.moveJ(self.joints_init, self.joints_init_speed, 1.4)
 
             # main loop
@@ -281,6 +283,7 @@ class RTDEInterpolationController(mp.Process):
                 # fetch command from queue
                 try:
                     commands = self.input_queue.get_all()
+                    # print(f"Commands: {commands}")
                     n_cmd = len(commands['cmd'])
                 except Empty:
                     n_cmd = 0

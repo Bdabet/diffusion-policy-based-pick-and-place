@@ -23,7 +23,8 @@ import cv2
 import numpy as np
 import scipy.spatial.transform as st
 from diffusion_policy.real_world.real_env import RealEnv
-from diffusion_policy.real_world.spacemouse_shared_memory import Spacemouse
+# from diffusion_policy.real_world.spacemouse_shared_memory import Spacemouse
+from diffusion_policy.real_world.spacemouse_shared_memory_modified import Spacemouse
 from diffusion_policy.common.precise_sleep import precise_wait
 from diffusion_policy.real_world.keystroke_counter import (
     KeystrokeCounter, Key, KeyCode
@@ -56,17 +57,27 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 video_crf=21,
                 shm_manager=shm_manager
             ) as env:
+
+            print("RealEnv initialized! 2")
+
             cv2.setNumThreads(1)
+            
 
             # realsense exposure
             env.realsense.set_exposure(exposure=120, gain=0)
+            
+            
             # realsense white balance
             env.realsense.set_white_balance(white_balance=5900)
 
+            
             time.sleep(1.0)
             print('Ready!')
             state = env.get_robot_state()
+            print(f'Robot state: {state}')
             target_pose = state['TargetTCPPose']
+            print(f'Robot target pose: {target_pose}')
+
             t_start = time.monotonic()
             iter_idx = 0
             stop = False
@@ -78,21 +89,27 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 t_command_target = t_cycle_end + dt
 
                 # pump obs
-                obs = env.get_obs()
+                # obs = env.get_obs()
+
+
+
+                # print("waiting for press events")
+
 
                 # handle key presses
                 press_events = key_counter.get_press_events()
+                # print(f"press_events: {press_events}")
                 for key_stroke in press_events:
-                    if key_stroke == KeyCode(char='q'):
+                    if key_stroke == KeyCode(char='l'):
                         # Exit program
                         stop = True
-                    elif key_stroke == KeyCode(char='c'):
+                    elif key_stroke == KeyCode(char='j'):
                         # Start recording
                         env.start_episode(t_start + (iter_idx + 2) * dt - time.monotonic() + time.time())
                         key_counter.clear()
                         is_recording = True
                         print('Recording!')
-                    elif key_stroke == KeyCode(char='s'):
+                    elif key_stroke == KeyCode(char='k'):
                         # Stop recording
                         env.end_episode()
                         key_counter.clear()
@@ -106,46 +123,63 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                             is_recording = False
                         # delete
                 stage = key_counter[Key.space]
+                # print(f"stage: {stage}")
 
                 # visualize
-                vis_img = obs[f'camera_{vis_camera_idx}'][-1,:,:,::-1].copy()
-                episode_id = env.replay_buffer.n_episodes
-                text = f'Episode: {episode_id}, Stage: {stage}'
-                if is_recording:
-                    text += ', Recording!'
-                cv2.putText(
-                    vis_img,
-                    text,
-                    (10,30),
-                    fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                    fontScale=1,
-                    thickness=2,
-                    color=(255,255,255)
-                )
+                # print("visualizing")
+                # vis_img = obs[f'camera_{vis_camera_idx}'][-1,:,:,::-1].copy()
+                # episode_id = env.replay_buffer.n_episodes
+                # text = f'Episode: {episode_id}, Stage: {stage}'
+                # if is_recording:
+                #     text += ', Recording!'
+                # cv2.putText(
+                #     vis_img,
+                #     text,
+                #     (10,30),
+                #     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                #     fontScale=1,
+                #     thickness=2,
+                #     color=(255,255,255)
+                # )
 
-                cv2.imshow('default', vis_img)
-                cv2.pollKey()
+                # cv2.imshow('default', vis_img)
+                # cv2.pollKey()
 
                 precise_wait(t_sample)
+                # print("Waited for t_sample time")
                 # get teleop command
-                sm_state = sm.get_motion_state_transformed()
-                # print(sm_state)
-                dpos = sm_state[:3] * (env.max_pos_speed / frequency)
-                drot_xyz = sm_state[3:] * (env.max_rot_speed / frequency)
+                sm_state = sm.get_motion_state()
+                # print(f"sm_state: {sm_state}")
                 
-                if not sm.is_button_pressed(0):
-                    # translation mode
-                    drot_xyz[:] = 0
-                else:
-                    dpos[:] = 0
-                if not sm.is_button_pressed(1):
-                    # 2D translation mode
-                    dpos[2] = 0    
+                # print(f"sm_state{sm_state}")
+                dpos = sm_state[:3] * (env.max_pos_speed / frequency)
+                if np.any(dpos != 0):
+                    print(f"dpos: {dpos}")
+                
+                drot_xyz = sm_state[3:] * (env.max_rot_speed / frequency)
+                drot_xyz[:] = 0
+                
+                # # commented out since no rotation is needed
+                # if not sm.is_button_pressed(0):
+                #     # translation mode
+                #     drot_xyz[:] = 0
+                # else:
+                #     dpos[:] = 0
+                # if not sm.is_button_pressed(1):
+                #     # 2D translation mode
+                #     dpos[2] = 0    
 
+                # print("Before euler")
                 drot = st.Rotation.from_euler('xyz', drot_xyz)
+                
+
+                # old_pose = target_pose.copy()
+                # print(f"old target pose: {old_pose}")
                 target_pose[:3] += dpos
                 target_pose[3:] = (drot * st.Rotation.from_rotvec(
                     target_pose[3:])).as_rotvec()
+                # int(f"target_pose: {target_pose}")
+                
 
                 # execute teleop command
                 env.exec_actions(
@@ -154,6 +188,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                     stages=[stage])
                 precise_wait(t_cycle_end)
                 iter_idx += 1
+               # print(f"iter_idx: {iter_idx}, t_cycle_end: {t_cycle_end}, t_command_target: {t_command_target}")
 
 # %%
 if __name__ == '__main__':

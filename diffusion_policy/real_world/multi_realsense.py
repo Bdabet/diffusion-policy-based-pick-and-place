@@ -33,6 +33,7 @@ class MultiRealsense:
             shm_manager.start()
         if serial_numbers is None:
             serial_numbers = SingleRealsense.get_connected_devices_serial()
+            print(f"camera serial numbers: {serial_numbers}")
         n_cameras = len(serial_numbers)
 
         advanced_mode_config = repeat_to_list(
@@ -70,9 +71,12 @@ class MultiRealsense:
             )
         
         self.cameras = cameras
+        print("real sense cameras ready state", [self.cameras[serial_num].is_ready for serial_num in self.cameras])
         self.shm_manager = shm_manager
+        print(f"MultiRealsense initialized with {len(self.cameras)} cameras.")
 
     def __enter__(self):
+        print("executing __enter__ from multirealsense")
         self.start()
         return self
     
@@ -108,7 +112,9 @@ class MultiRealsense:
             self.stop_wait()
 
     def start_wait(self):
+        print("camera serial numbers: ", [camera.serial_number for camera in self.cameras.values()])
         for camera in self.cameras.values():
+            print(f"Waiting for camera {camera.serial_number} to be ready...")
             camera.start_wait()
 
     def stop_wait(self):
