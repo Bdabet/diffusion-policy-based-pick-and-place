@@ -76,7 +76,8 @@ class SingleRealsense(mp.Process):
                 else vis_transform(dict(examples)),
             get_max_k=1,
             get_time_budget=0.2,
-            put_desired_frequency=capture_fps
+         
+             put_desired_frequency=capture_fps
         )
 
         ring_buffer = SharedMemoryRingBuffer.create_from_examples(
@@ -283,8 +284,8 @@ class SingleRealsense(mp.Process):
     # ========= interval API ===========
     def run(self):
         # limit threads
-        threadpool_limits(1)
-        cv2.setNumThreads(1)
+        # threadpool_limits(1)
+        # cv2.setNumThreads(1)
 
         w, h = self.resolution
         fps = self.capture_fps
