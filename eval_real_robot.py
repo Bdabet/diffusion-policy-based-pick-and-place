@@ -34,7 +34,8 @@ import skvideo.io
 from omegaconf import OmegaConf
 import scipy.spatial.transform as st
 from diffusion_policy.real_world.real_env import RealEnv
-from diffusion_policy.real_world.spacemouse_shared_memory import Spacemouse
+# from diffusion_policy.real_world.spacemouse_shared_memory_modified import Spacemouse
+from diffusion_policy.real_world.xbox_shared_memory import Spacemouse
 from diffusion_policy.common.precise_sleep import precise_wait
 from diffusion_policy.real_world.real_inference_util import (
     get_real_obs_resolution, 
@@ -43,6 +44,9 @@ from diffusion_policy.common.pytorch_util import dict_apply
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 from diffusion_policy.policy.base_image_policy import BaseImagePolicy
 from diffusion_policy.common.cv2_util import get_image_transform
+from diffusion_policy.real_world.keystroke_counter import (
+    KeystrokeCounter, Key, KeyCode
+)
 
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
@@ -56,13 +60,17 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 @click.option('--vis_camera_idx', default=0, type=int, help="Which RealSense camera to visualize.")
 @click.option('--init_joints', '-j', is_flag=True, default=False, help="Whether to initialize robot joint configuration in the beginning.")
 @click.option('--steps_per_inference', '-si', default=6, type=int, help="Action horizon for inference.")
-@click.option('--max_duration', '-md', default=60, help='Max duration for each epoch in seconds.')
+@click.option('--max_duration', '-md', default=120, help='Max duration for each epoch in seconds.')
 @click.option('--frequency', '-f', default=10, type=float, help="Control frequency in Hz.")
 @click.option('--command_latency', '-cl', default=0.01, type=float, help="Latency between receiving SapceMouse command to executing on Robot in Sec.")
 def main(input, output, robot_ip, match_dataset, match_episode,
     vis_camera_idx, init_joints, 
     steps_per_inference, max_duration,
     frequency, command_latency):
+
+
+
+
     # load match_dataset
     match_camera_idx = 0
     episode_first_frame_map = dict()
@@ -87,6 +95,8 @@ def main(input, output, robot_ip, match_dataset, match_episode,
     workspace: BaseWorkspace
     workspace.load_payload(payload, exclude_keys=None, include_keys=None)
 
+    print("Loaded workspace from", ckpt_path)
+
     # hacks for method-specific setup.
     action_offset = 0
     delta_action = False
@@ -98,7 +108,9 @@ def main(input, output, robot_ip, match_dataset, match_episode,
             policy = workspace.ema_model
 
         device = torch.device('cuda')
+        print("Using device:", device)
         policy.eval().to(device)
+        # print("Policy loaded:", policy)
 
         # set inference params
         policy.num_inference_steps = 16 # DDIM inference iterations
@@ -141,7 +153,9 @@ def main(input, output, robot_ip, match_dataset, match_episode,
     print("action_offset:", action_offset)
 
     with SharedMemoryManager() as shm_manager:
-        with Spacemouse(shm_manager=shm_manager) as sm, RealEnv(
+        with KeystrokeCounter() as key_counter, \
+             Spacemouse(shm_manager=shm_manager) as sm, \
+             RealEnv(
             output_dir=output, 
             robot_ip=robot_ip, 
             frequency=frequency,
@@ -155,7 +169,8 @@ def main(input, output, robot_ip, match_dataset, match_episode,
             thread_per_video=3,
             # video recording quality, lower is better (but slower).
             video_crf=21,
-            shm_manager=shm_manager) as env:
+            shm_manager=shm_manager,
+            max_pos_speed = 0.25) as env:
             cv2.setNumThreads(1)
 
             # Should be the same as demo
@@ -181,93 +196,137 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                 del result
 
             print('Ready!')
+            
             while True:
                 # ========= human control loop ==========
                 print("Human in control!")
+                
+                
                 state = env.get_robot_state()
+                # print(state)
                 target_pose = state['TargetTCPPose']
                 t_start = time.monotonic()
                 iter_idx = 0
                 while True:
+                    exit_while_loop = False
                     # calculate timing
                     t_cycle_end = t_start + (iter_idx + 1) * dt
                     t_sample = t_cycle_end - command_latency
                     t_command_target = t_cycle_end + dt
 
                     # pump obs
-                    obs = env.get_obs()
+                    # obs = env.get_obs()
 
                     # visualize
-                    episode_id = env.replay_buffer.n_episodes
-                    vis_img = obs[f'camera_{vis_camera_idx}'][-1]
-                    match_episode_id = episode_id
-                    if match_episode is not None:
-                        match_episode_id = match_episode
-                    if match_episode_id in episode_first_frame_map:
-                        match_img = episode_first_frame_map[match_episode_id]
-                        ih, iw, _ = match_img.shape
-                        oh, ow, _ = vis_img.shape
-                        tf = get_image_transform(
-                            input_res=(iw, ih), 
-                            output_res=(ow, oh), 
-                            bgr_to_rgb=False)
-                        match_img = tf(match_img).astype(np.float32) / 255
-                        vis_img = np.minimum(vis_img, match_img)
+                    # episode_id = env.replay_buffer.n_episodes
+                    # # vis_img = obs[f'camera_{vis_camera_idx}'][-1]
+                    # match_episode_id = episode_id
+                    # if match_episode is not None:
+                    #     match_episode_id = match_episode
+                    # if match_episode_id in episode_first_frame_map:
+                    #     match_img = episode_first_frame_map[match_episode_id]
+                    #     ih, iw, _ = match_img.shape
+                    #     oh, ow, _ = vis_img.shape
+                    #     tf = get_image_transform(
+                    #         input_res=(iw, ih), 
+                    #         output_res=(ow, oh), 
+                    #         bgr_to_rgb=False)
+                    #     match_img = tf(match_img).astype(np.float32) / 255
+                    #     vis_img = np.minimum(vis_img, match_img)
 
-                    text = f'Episode: {episode_id}'
-                    cv2.putText(
-                        vis_img,
-                        text,
-                        (10,20),
-                        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                        fontScale=0.5,
-                        thickness=1,
-                        color=(255,255,255)
-                    )
-                    cv2.imshow('default', vis_img[...,::-1])
-                    key_stroke = cv2.pollKey()
-                    if key_stroke == ord('q'):
-                        # Exit program
-                        env.end_episode()
-                        exit(0)
-                    elif key_stroke == ord('c'):
-                        # Exit human control loop
-                        # hand control over to the policy
-                        break
+                    # text = f'Episode: {episode_id}'
+                    # cv2.putText(
+                    #     vis_img,
+                    #     text,
+                    #     (10,20),
+                    #     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                    #     fontScale=0.5,
+                    #     thickness=1,
+                    #     color=(255,255,255)
+                    # )
+                    # cv2.imshow('default', vis_img[...,::-1])
+
+                    # create blank black image to be able to read inputs
+                    # img = np.zeros((300, 300, 3), dtype=np.uint8)
+                    # print("image", img)
+
+                    # cv2.imshow("Window", img)
+                    # print("image shown")#
+
+
+                    press_events = key_counter.get_press_events()
+                    # print(f"Press events: {press_events}")
+
+                    for key_stroke in press_events:
+                    
+                        if key_stroke == KeyCode(char='q'):
+                            # Exit program
+                            env.end_episode()
+                            exit(0)
+                        elif key_stroke == KeyCode(char='c'):
+                            # Exit human control loop
+                            # hand control over to the policy
+                            exit_while_loop = True
+                            break
+
 
                     precise_wait(t_sample)
+                    # print("Waited for t_sample time")
                     # get teleop command
-                    sm_state = sm.get_motion_state_transformed()
-                    # print(sm_state)
+                    sm_state = sm.get_motion_state()
+                    # print(f"sm_state: {sm_state}")
+                    
+                    # print(f"sm_state{sm_state}")
                     dpos = sm_state[:3] * (env.max_pos_speed / frequency)
+                    # if np.any(dpos != 0):
+                    #     print(f"dpos: {dpos}")
+                    
                     drot_xyz = sm_state[3:] * (env.max_rot_speed / frequency)
-  
-                    if not sm.is_button_pressed(0):
-                        # translation mode
-                        drot_xyz[:] = 0
-                    else:
-                        dpos[:] = 0
-                    if not sm.is_button_pressed(1):
-                        # 2D translation mode
-                        dpos[2] = 0    
+                    drot_xyz[:] = 0
+                    
+                    # # commented out since no rotation is needed
+                    # if not sm.is_button_pressed(0):
+                    #     # translation mode
+                    #     drot_xyz[:] = 0
+                    # else:
+                    #     dpos[:] = 0
+                    # if not sm.is_button_pressed(1):
+                    #     # 2D translation mode
+                    #     dpos[2] = 0    
 
+                    # print("Before euler")
                     drot = st.Rotation.from_euler('xyz', drot_xyz)
+                    
+
+                    # old_pose = target_pose.copy()
+                    # print(f"old target pose: {old_pose}")
                     target_pose[:3] += dpos
                     target_pose[3:] = (drot * st.Rotation.from_rotvec(
                         target_pose[3:])).as_rotvec()
-                    # clip target pose
-                    target_pose[:2] = np.clip(target_pose[:2], [0.25, -0.45], [0.77, 0.40])
+                    # int(f"target_pose: {target_pose}")
+                    
 
                     # execute teleop command
                     env.exec_actions(
                         actions=[target_pose], 
-                        timestamps=[t_command_target-time.monotonic()+time.time()])
+                        timestamps=[t_command_target-time.monotonic()+time.time()]
+                        )
                     precise_wait(t_cycle_end)
                     iter_idx += 1
-                
+
+
+
+                    if exit_while_loop:
+                        pause_enabled = False
+                        print("Exiting human control loop")
+                        break
+                    
+                    
+               
                 # ========== policy control loop ==============
                 try:
                     # start episode
+                    print("Policy in control!")
                     policy.reset()
                     start_delay = 1.0
                     eval_t_start = time.time() + start_delay
@@ -299,6 +358,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             obs_dict = dict_apply(obs_dict_np, 
                                 lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
                             result = policy.predict_action(obs_dict)
+                            # print("result", result)
                             # this action starts from the first obs step
                             action = result['action'][0].detach().to('cpu').numpy()
                             print('Inference latency:', time.time() - s)
@@ -337,8 +397,16 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             action_timestamps = action_timestamps[is_new]
 
                         # clip actions
+
+                        unclipped_target_poses = this_target_poses.copy()
                         this_target_poses[:,:2] = np.clip(
-                            this_target_poses[:,:2], [0.25, -0.45], [0.77, 0.40])
+                            this_target_poses[:,:2], [-0.8, -0.63], [-0.25, 0])
+                        
+                        if np.any(this_target_poses != unclipped_target_poses):
+                            print("Clipped target poses:")
+                            print("Unclipped:", unclipped_target_poses)
+                            print("Clipped:", this_target_poses)
+
 
                         # execute actions
                         env.exec_actions(
@@ -347,31 +415,63 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         )
                         print(f"Submitted {len(this_target_poses)} steps of actions.")
 
-                        # visualize
-                        episode_id = env.replay_buffer.n_episodes
-                        vis_img = obs[f'camera_{vis_camera_idx}'][-1]
-                        text = 'Episode: {}, Time: {:.1f}'.format(
-                            episode_id, time.monotonic() - t_start
-                        )
-                        cv2.putText(
-                            vis_img,
-                            text,
-                            (10,20),
-                            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                            fontScale=0.5,
-                            thickness=1,
-                            color=(255,255,255)
-                        )
-                        cv2.imshow('default', vis_img[...,::-1])
+                        if pause_enabled:
+                            pause_start_time = time.monotonic()
+                            print("Paused. Press 'r' to resume...")
+                            exit_pause_loop = False
+                            while True:
+                                press_events = key_counter.get_press_events()
+                                # print(f"Press events during pause: {press_events}")
+                                for key_stroke in press_events:
+                                    if key_stroke == KeyCode(char='r'):
+                                        # paused_duration = time.monotonic() - pause_start_time
+                                        # print("paused_duration:", paused_duration)
+                                        # total_paused_time = total_paused_time + paused_duration
+                                        # print("total_paused_time:", total_paused_time)
+                                        print(f"Resumed after seconds pause.")
+                                        exit_pause_loop = True
+                                        break
+                                    
+                                    
+                                if exit_pause_loop:
+                                    print("Exited pause loop.")
+                                    break
+                                
 
+                        # # visualize
+                        # episode_id = env.replay_buffer.n_episodes
+                        # vis_img = obs[f'camera_{vis_camera_idx}'][-1]
+                        # text = 'Episode: {}, Time: {:.1f}'.format(
+                        #     episode_id, time.monotonic() - t_start
+                        # )
+                        # cv2.putText(
+                        #     vis_img,
+                        #     text,
+                        #     (10,20),
+                        #     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                        #     fontScale=0.5,
+                        #     thickness=1,
+                        #     color=(255,255,255)
+                        # )
+                        # cv2.imshow('default', vis_img[...,::-1])
 
-                        key_stroke = cv2.pollKey()
-                        if key_stroke == ord('s'):
-                            # Stop episode
-                            # Hand control back to human
-                            env.end_episode()
-                            print('Stopped.')
-                            break
+                        # print("waiting for stop press event")
+                        
+                        press_events = key_counter.get_press_events()
+                        exit_stop_while_loop = False
+                        for key_stroke in press_events:
+                            if key_stroke == KeyCode(char='s'):
+                                # Stop episode
+                                # Hand control back to human
+                                # print("pess events in stop loop:", press_events)
+                                print('Stopping episode...')
+                                env.end_episode()
+                                terminate = True
+                                break
+                            
+                            
+                                
+                        
 
                         # auto termination
                         terminate = False
@@ -382,7 +482,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         term_pose = np.array([ 3.40948500e-01,  2.17721816e-01,  4.59076878e-02,  2.22014183e+00, -2.22184883e+00, -4.07186655e-04])
                         curr_pose = obs['robot_eef_pose'][-1]
                         dist = np.linalg.norm((curr_pose - term_pose)[:2], axis=-1)
-                        if dist < 0.03:
+                        if dist < 0.05:
                             # in termination area
                             curr_timestamp = obs['timestamp'][-1]
                             if term_area_start_timestamp > curr_timestamp:
