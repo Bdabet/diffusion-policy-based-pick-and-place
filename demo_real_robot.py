@@ -24,7 +24,8 @@ import numpy as np
 import scipy.spatial.transform as st
 from diffusion_policy.real_world.real_env import RealEnv
 # from diffusion_policy.real_world.spacemouse_shared_memory import Spacemouse
-from diffusion_policy.real_world.spacemouse_shared_memory_modified import Spacemouse
+# from diffusion_policy.real_world.spacemouse_shared_memory_modified import Spacemouse
+from diffusion_policy.real_world.xbox_shared_memory import Spacemouse
 from diffusion_policy.common.precise_sleep import precise_wait
 from diffusion_policy.real_world.keystroke_counter import (
     KeystrokeCounter, Key, KeyCode
@@ -89,7 +90,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 t_command_target = t_cycle_end + dt
 
                 # pump obs
-                # obs = env.get_obs()
+                obs = env.get_obs()
 
 
 
@@ -127,23 +128,31 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
 
                 # visualize
                 # print("visualizing")
-                # vis_img = obs[f'camera_{vis_camera_idx}'][-1,:,:,::-1].copy()
-                # episode_id = env.replay_buffer.n_episodes
+                vis_img = obs[f'camera_{vis_camera_idx}'][-1,:,:,::-1].copy()
+                # print(f"vis_img shape: {vis_img.shape}")
+                episode_id = env.replay_buffer.n_episodes
+                # print(f"Episode ID: {episode_id}, Stage: {stage}, is_recording: {is_recording}")
                 # text = f'Episode: {episode_id}, Stage: {stage}'
                 # if is_recording:
                 #     text += ', Recording!'
-                # cv2.putText(
-                #     vis_img,
-                #     text,
-                #     (10,30),
-                #     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                #     fontScale=1,
-                #     thickness=2,
-                #     color=(255,255,255)
-                # )
-
-                # cv2.imshow('default', vis_img)
-                # cv2.pollKey()
+                #     cv2.putText(
+                #         vis_img,
+                #         text,
+                #         (10,30),
+                #         fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                #         fontScale=1,
+                #         thickness=2,
+                #         color=(255,255,255)
+                #     )
+                #     print(vis_img)
+                #     print("data type", vis_img.dtype)
+                #     cv2.imshow('default', np.array(vis_img))
+                    
+                #     cv2.waitKey(0)
+                # else:
+                #     cv2.destroyAllWindows()
+                
+                
 
                 precise_wait(t_sample)
                 # print("Waited for t_sample time")
@@ -153,8 +162,8 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 
                 # print(f"sm_state{sm_state}")
                 dpos = sm_state[:3] * (env.max_pos_speed / frequency)
-                if np.any(dpos != 0):
-                    print(f"dpos: {dpos}")
+                # if np.any(dpos != 0):
+                #     print(f"dpos: {dpos}")
                 
                 drot_xyz = sm_state[3:] * (env.max_rot_speed / frequency)
                 drot_xyz[:] = 0
