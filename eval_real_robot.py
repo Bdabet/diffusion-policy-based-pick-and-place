@@ -169,8 +169,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
             thread_per_video=3,
             # video recording quality, lower is better (but slower).
             video_crf=21,
-            shm_manager=shm_manager,
-            max_pos_speed = 0.25) as env:
+            shm_manager=shm_manager) as env:
             cv2.setNumThreads(1)
 
             # Should be the same as demo
@@ -319,6 +318,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                     if exit_while_loop:
                         pause_enabled = False
                         print("Exiting human control loop")
+                        terminate = False
                         break
                     
                     
@@ -347,6 +347,8 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         # get obs
                         print('get_obs')
                         obs = env.get_obs()
+
+                        print ("observation", obs)
                         obs_timestamps = obs['timestamp']
                         print(f'Obs latency {time.time() - obs_timestamps[-1]}')
 
@@ -376,6 +378,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             this_target_poses = np.zeros((len(action), len(target_pose)), dtype=np.float64)
                             this_target_poses[:] = target_pose
                             this_target_poses[:,[0,1]] = action
+                            print("initially predicted target poses", this_target_poses)
 
                         # deal with timing
                         # the same step actions are always the target for
@@ -396,17 +399,18 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             this_target_poses = this_target_poses[is_new]
                             action_timestamps = action_timestamps[is_new]
 
-                        # clip actions
+                        # # clip actions
 
-                        unclipped_target_poses = this_target_poses.copy()
-                        this_target_poses[:,:2] = np.clip(
-                            this_target_poses[:,:2], [-0.8, -0.63], [-0.25, 0])
+                        # unclipped_target_poses = this_target_poses.copy()
+                        # this_target_poses[:,:2] = np.clip(
+                        #     this_target_poses[:,:2], [-0.8, -0.63], [-0.25, 0])
                         
-                        if np.any(this_target_poses != unclipped_target_poses):
-                            print("Clipped target poses:")
-                            print("Unclipped:", unclipped_target_poses)
-                            print("Clipped:", this_target_poses)
+                        # if np.any(this_target_poses != unclipped_target_poses):
+                        #     print("Clipped target poses:")
+                        #     print("Unclipped:", unclipped_target_poses)
+                        #     print("Clipped:", this_target_poses)
 
+                        print("sent target poses", this_target_poses)
 
                         # execute actions
                         env.exec_actions(
@@ -415,27 +419,27 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         )
                         print(f"Submitted {len(this_target_poses)} steps of actions.")
 
-                        if pause_enabled:
-                            pause_start_time = time.monotonic()
-                            print("Paused. Press 'r' to resume...")
-                            exit_pause_loop = False
-                            while True:
-                                press_events = key_counter.get_press_events()
-                                # print(f"Press events during pause: {press_events}")
-                                for key_stroke in press_events:
-                                    if key_stroke == KeyCode(char='r'):
-                                        # paused_duration = time.monotonic() - pause_start_time
-                                        # print("paused_duration:", paused_duration)
-                                        # total_paused_time = total_paused_time + paused_duration
-                                        # print("total_paused_time:", total_paused_time)
-                                        print(f"Resumed after seconds pause.")
-                                        exit_pause_loop = True
-                                        break
+                        # if pause_enabled:
+                        #     pause_start_time = time.monotonic()
+                        #     print("Paused. Press 'r' to resume...")
+                        #     exit_pause_loop = False
+                        #     while True:
+                        #         press_events = key_counter.get_press_events()
+                        #         # print(f"Press events during pause: {press_events}")
+                        #         for key_stroke in press_events:
+                        #             if key_stroke == KeyCode(char='r'):
+                        #                 # paused_duration = time.monotonic() - pause_start_time
+                        #                 # print("paused_duration:", paused_duration)
+                        #                 # total_paused_time = total_paused_time + paused_duration
+                        #                 # print("total_paused_time:", total_paused_time)
+                        #                 print(f"Resumed after seconds pause.")
+                        #                 exit_pause_loop = True
+                        #                 break
                                     
                                     
-                                if exit_pause_loop:
-                                    print("Exited pause loop.")
-                                    break
+                        #         if exit_pause_loop:
+                        #             print("Exited pause loop.")
+                        #             break
                                 
 
                         # # visualize
@@ -456,14 +460,15 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         # cv2.imshow('default', vis_img[...,::-1])
 
                         # print("waiting for stop press event")
-                        
+
+                        terminate = False
                         press_events = key_counter.get_press_events()
                         exit_stop_while_loop = False
                         for key_stroke in press_events:
                             if key_stroke == KeyCode(char='s'):
                                 # Stop episode
                                 # Hand control back to human
-                                # print("pess events in stop loop:", press_events)
+                                print("pess events in stop loop:", press_events)
                                 print('Stopping episode...')
                                 env.end_episode()
                                 terminate = True
@@ -473,8 +478,8 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                                 
                         
 
-                        # auto termination
-                        terminate = False
+                       
+                        
                         if time.monotonic() - t_start > max_duration:
                             terminate = True
                             print('Terminated by the timeout!')
@@ -482,7 +487,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         term_pose = np.array([ 3.40948500e-01,  2.17721816e-01,  4.59076878e-02,  2.22014183e+00, -2.22184883e+00, -4.07186655e-04])
                         curr_pose = obs['robot_eef_pose'][-1]
                         dist = np.linalg.norm((curr_pose - term_pose)[:2], axis=-1)
-                        if dist < 0.05:
+                        if dist < 0.03:
                             # in termination area
                             curr_timestamp = obs['timestamp'][-1]
                             if term_area_start_timestamp > curr_timestamp:
@@ -497,6 +502,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             term_area_start_timestamp = float('inf')
 
                         if terminate:
+                            print("episode terminated")
                             env.end_episode()
                             break
 

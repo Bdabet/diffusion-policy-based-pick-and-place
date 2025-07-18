@@ -55,6 +55,7 @@ class RealPushTImageDataset(BaseImageDataset):
                     # cache does not exists
                     try:
                         print('Cache does not exist. Creating!')
+                        print("dataset path used", dataset_path)
                         replay_buffer = _get_replay_buffer(
                             dataset_path=dataset_path,
                             shape_meta=shape_meta,
@@ -62,10 +63,13 @@ class RealPushTImageDataset(BaseImageDataset):
                         )
                         print('Saving cache to disk.')
                         with zarr.ZipStore(cache_zarr_path) as zip_store:
+                            
                             replay_buffer.save_to_store(
                                 store=zip_store
                             )
                     except Exception as e:
+                        print("exception raised")
+                        
                         shutil.rmtree(cache_zarr_path)
                         raise e
                 else:
@@ -119,7 +123,29 @@ class RealPushTImageDataset(BaseImageDataset):
             n_episodes=replay_buffer.n_episodes, 
             val_ratio=val_ratio,
             seed=seed)
-        train_mask = ~val_mask
+        
+        #adjustemts for limit
+
+        # train_mask = ~val_mask
+
+        # Limit to episodes 0 to 89
+        max_episode_idx = 89
+        valid_episode_mask = np.zeros(replay_buffer.n_episodes, dtype=bool)
+        valid_episode_mask[:max_episode_idx] = True
+
+        # Now apply validation split **only on allowed episodes**
+        val_mask = get_val_mask(
+            n_episodes=replay_buffer.n_episodes,
+            val_ratio=val_ratio,
+            seed=seed)
+
+        # Remove episodes >= 89 from validation and training
+        val_mask = np.logical_and(val_mask, valid_episode_mask)
+        train_mask = np.logical_and(~val_mask, valid_episode_mask)
+
+        #end of adjustemnts
+
+
         train_mask = downsample_mask(
             mask=train_mask, 
             max_n=max_train_episodes, 

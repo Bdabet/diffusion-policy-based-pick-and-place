@@ -13,7 +13,7 @@ class Spacemouse(mp.Process):
             max_value=500, 
             deadzone=(0,0,0,0,0,0), 
             dtype=np.float32,
-            n_buttons=2,
+            n_buttons=1,
             ):
         """
         Continuously listen to 3D connection space naviagtor events
@@ -131,7 +131,7 @@ class Spacemouse(mp.Process):
         
 
         self.motion_event = np.zeros((7,), dtype=np.int64)  # only using indices 0–2
-        self.button_state = np.zeros((self.n_buttons,), dtype=bool) #dummy
+        self.button_state = np.zeros((self.n_buttons,), dtype=bool) 
         # send one message immediately so client can start reading
         self.ring_buffer.put({
             'motion_event': self.motion_event.copy(),
@@ -151,8 +151,14 @@ class Spacemouse(mp.Process):
             # print("joystick_read",joystick.read())
             
 
-            self.motion_event[0] = joystick.read()[1]*100  # X
-            self.motion_event[1] = joystick.read()[0]*100  # Y
+            if abs(joystick.read()[1]) > 0.1:
+                self.motion_event[0] = -joystick.read()[1]*120  # X
+            else:
+                self.motion_event[0] = 0
+            if abs(joystick.read()[0]) > 0.1:
+                self.motion_event[1] = -joystick.read()[0]*120  # Y
+            else:
+                self.motion_event[1] = 0
             if joystick.read()[2] > 0:
                 self.motion_event[2] = 50
             elif joystick.read()[3] > 0:
@@ -164,6 +170,10 @@ class Spacemouse(mp.Process):
             self.motion_event[6] = 1                   # dummy
 
             # print(f"motion_event: {self.motion_event}")
+
+
+            self.button_state[0] = joystick.read()[4]
+            # print("button state intern", self.button_state)
 
             self.ring_buffer.put({
                 'motion_event': self.motion_event.copy(),

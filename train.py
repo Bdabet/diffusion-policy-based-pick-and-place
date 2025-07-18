@@ -2,6 +2,8 @@
 Usage:
 Training:
 python train.py --config-name=train_diffusion_lowdim_workspace
+
+#last keyboard domo video #89
 """
 
 import sys
@@ -28,7 +30,17 @@ def main(cfg: OmegaConf):
     OmegaConf.resolve(cfg)
 
     cls = hydra.utils.get_class(cfg._target_)
+    
+    # Define custom output directory
+    # custom_output_dir = "/workspace/diffusion_policy/data/outputs/2025.07.10/13.09.43_train_diffusion_unet_image_real_image"
+    
+    
+    
+   
+
+    # Initialize workspace with the custom output directory
     workspace: BaseWorkspace = cls(cfg)
+    # workspace: BaseWorkspace = cls(cfg)
     workspace.run()
 
 if __name__ == "__main__":

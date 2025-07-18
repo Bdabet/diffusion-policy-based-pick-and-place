@@ -68,6 +68,7 @@ class RealEnv:
         video_dir = output_dir.joinpath('videos')
         video_dir.mkdir(parents=True, exist_ok=True)
         zarr_path = str(output_dir.joinpath('replay_buffer.zarr').absolute())
+        
         replay_buffer = ReplayBuffer.create_from_path(
             zarr_path=zarr_path, mode='a')
 
@@ -155,9 +156,6 @@ class RealEnv:
         j_init = np.array([-144,-120,-101,-50,90,-90]) / 180 * np.pi
         if not init_joints:
             j_init = None
-        print(f"j_init: {j_init}")
-        
-        print("reached RTDE controller init")
 
         robot = RTDEInterpolationController(
             shm_manager=shm_manager,
@@ -200,8 +198,6 @@ class RealEnv:
         self.stage_accumulator = None
 
         self.start_time = None
-
-        print("RealEnv initialized 1 !")
     
     # ======== start-stop API =============
     @property
@@ -211,7 +207,6 @@ class RealEnv:
     
     def start(self, wait=True):
         self.realsense.start(wait=False)
-        print("reached robot.start")
         self.robot.start(wait=False)
         if self.multi_cam_vis is not None:
             self.multi_cam_vis.start(wait=False)
@@ -228,11 +223,8 @@ class RealEnv:
             self.stop_wait()
 
     def start_wait(self):
-        print("start_wait line 1")
         self.realsense.start_wait()
-        print("start_wait line 2")
         self.robot.start_wait()
-        print("start_wait line 3")
         if self.multi_cam_vis is not None:
             self.multi_cam_vis.start_wait()
     
@@ -244,7 +236,6 @@ class RealEnv:
 
     # ========= context manager ===========
     def __enter__(self):
-        print("executing __enter__ from real_env via context manager")
         self.start()
         return self
     
@@ -336,6 +327,7 @@ class RealEnv:
         receive_time = time.time()
         is_new = timestamps > receive_time
         new_actions = actions[is_new]
+        # print("new actions", new_actions)
         new_timestamps = timestamps[is_new]
         new_stages = stages[is_new]
 

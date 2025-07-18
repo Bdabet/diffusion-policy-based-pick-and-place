@@ -34,7 +34,10 @@ class MultiRealsense:
         if serial_numbers is None:
             serial_numbers = SingleRealsense.get_connected_devices_serial()
             print(f"camera serial numbers: {serial_numbers}")
+            
         n_cameras = len(serial_numbers)
+        print(f"camera serial numbers: {serial_numbers},no of cameras: {n_cameras}")
+
 
         advanced_mode_config = repeat_to_list(
             advanced_mode_config, n_cameras, dict)

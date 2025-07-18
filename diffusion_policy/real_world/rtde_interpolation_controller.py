@@ -8,8 +8,9 @@ import scipy.spatial.transform as st
 import numpy as np
 from rtde_control import RTDEControlInterface
 from rtde_receive import RTDEReceiveInterface
+from rtde_io import RTDEIOInterface
 from diffusion_policy.shared_memory.shared_memory_queue import (
-    SharedMemoryQueue, Empty)
+     SharedMemoryQueue, Empty)
 from diffusion_policy.shared_memory.shared_memory_ring_buffer import SharedMemoryRingBuffer
 from diffusion_policy.common.pose_trajectory_interpolator import PoseTrajectoryInterpolator
 
@@ -17,7 +18,7 @@ class Command(enum.Enum):
     STOP = 0
     SERVOL = 1
     SCHEDULE_WAYPOINT = 2
-
+    GRIPPER = 3
 
 class RTDEInterpolationController(mp.Process):
     """
@@ -44,6 +45,8 @@ class RTDEInterpolationController(mp.Process):
             verbose=False,
             receive_keys=None,
             get_max_k=128,
+            gripper_open_bit = 16,
+            gripper_close_bit = 17
             ):
         """
         frequency: CB2=125, UR3e=500
@@ -92,18 +95,20 @@ class RTDEInterpolationController(mp.Process):
         self.joints_init_speed = joints_init_speed
         self.soft_real_time = soft_real_time
         self.verbose = verbose
+        self.gripper_open_bit = gripper_open_bit
+        self.gripper_close_bit = gripper_close_bit
 
-        # build input queue
         example = {
             'cmd': Command.SERVOL.value,
             'target_pose': np.zeros((6,), dtype=np.float64),
             'duration': 0.0,
-            'target_time': 0.0
+            'target_time': 0.0,
+            'gripper_status': 0
         }
         input_queue = SharedMemoryQueue.create_from_examples(
             shm_manager=shm_manager,
             examples=example,
-            buffer_size=256
+            buffer_size=512
         )
 
         # build ring buffer
@@ -113,6 +118,12 @@ class RTDEInterpolationController(mp.Process):
                 'ActualTCPSpeed',
                 'ActualQ',
                 'ActualQd',
+                'GripperState',
+                'OpenDigitalOutState',
+                'ClosedDigitalOutState',
+
+
+
 
                 'TargetTCPPose',
                 'TargetTCPSpeed',
@@ -120,9 +131,37 @@ class RTDEInterpolationController(mp.Process):
                 'TargetQd'
             ]
         rtde_r = RTDEReceiveInterface(hostname=robot_ip)
+        
         example = dict()
         for key in receive_keys:
-            example[key] = np.array(getattr(rtde_r, 'get'+key)())
+
+            
+            
+            if key == 'OpenDigitalOutState':
+                example[key] = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_open_bit))
+            elif key == 'ClosedDigitalOutState':
+                example[key] = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_close_bit)) 
+            elif key == 'GripperState':
+                open_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_open_bit))
+                closed_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_close_bit))
+                if open_output and closed_output: 
+                    example[key] = 1
+                elif open_output and not closed_output:
+                    example[key] = 0
+                elif not open_output and closed_output:
+                    example[key] = 1
+                open_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_open_bit))
+                closed_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_close_bit))
+                if open_output and closed_output: 
+                    example[key] = 1
+                elif open_output and not closed_output:
+                    example[key] = 0
+                elif not open_output and closed_output:
+                    example[key] = 1
+            else:
+                example[key] = np.array(getattr(rtde_r, 'get'+key)())
+
+
         example['robot_receive_timestamp'] = time.time()
         ring_buffer = SharedMemoryRingBuffer.create_from_examples(
             shm_manager=shm_manager,
@@ -164,15 +203,25 @@ class RTDEInterpolationController(mp.Process):
     def is_ready(self):
         return self.ready_event.is_set()
 
-    # ========= context manager ===========
+    # ========= context manager ===========1
     def __enter__(self):
         self.start()
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
-        
+
+    def gripper_command(self, status):
+        self.input_queue.put({
+            'cmd': Command.GRIPPER.value,
+            'target_pose': np.zeros(6),
+            'duration': 0.0,
+            'target_time': 0.0,
+            'gripper_status': int(status)
+        })
+
     # ========= command methods ============
+    
     def servoL(self, pose, duration=0.1):
         """
         duration: desired time to reach pose
@@ -181,28 +230,25 @@ class RTDEInterpolationController(mp.Process):
         assert(duration >= (1/self.frequency))
         pose = np.array(pose)
         assert pose.shape == (6,)
-
-        message = {
+        self.input_queue.put({
             'cmd': Command.SERVOL.value,
             'target_pose': pose,
-            'duration': duration
-        }
-        self.input_queue.put(message)
-    
+            'duration': duration,
+            'target_time': 0.0,
+            'gripper_status': 0
+        })
+            
     def schedule_waypoint(self, pose, target_time):
-        assert target_time > time.time()
         pose = np.array(pose)
         assert pose.shape == (6,)
-
-        message = {
+        self.input_queue.put({
             'cmd': Command.SCHEDULE_WAYPOINT.value,
             'target_pose': pose,
-            'target_time': target_time
-        }
-        # print(f"[RTDEPositionalController] Schedule waypoint at {target_time} with pose {pose}")
-        self.input_queue.put(message)
+            'duration': 0.0,
+            'target_time': target_time,
+            'gripper_status': 0
+        })
 
-    # ========= receive APIs =============
     def get_state(self, k=None, out=None):
         if k is None:
             return self.ring_buffer.get(out=out)
@@ -219,14 +265,13 @@ class RTDEInterpolationController(mp.Process):
             os.sched_setscheduler(
                 0, os.SCHED_RR, os.sched_param(20))
 
-        # start rtde
-        robot_ip = self.robot_ip
-        rtde_c = RTDEControlInterface(hostname=robot_ip)
-        rtde_r = RTDEReceiveInterface(hostname=robot_ip)
-
+        rtde_c = RTDEControlInterface(hostname=self.robot_ip)
+        rtde_r = RTDEReceiveInterface(hostname=self.robot_ip)
+        rtde_io = RTDEIOInterface(hostname=self.robot_ip)
+        
         try:
             if self.verbose:
-                print(f"[RTDEPositionalController] Connect to robot: {robot_ip}")
+                print(f"[RTDEPositionalController] Connect to robot: {self.robot_ip}")
 
             # set parameters
             if self.tcp_offset_pose is not None:
@@ -276,7 +321,25 @@ class RTDEInterpolationController(mp.Process):
                 # update robot state
                 state = dict()
                 for key in self.receive_keys:
-                    state[key] = np.array(getattr(rtde_r, 'get'+key)())
+                    if key == 'OpenDigitalOutState':
+                        state[key] = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_open_bit))
+                    elif key == 'ClosedDigitalOutState':
+                        state[key] = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_close_bit))
+                    elif key == 'GripperState':
+                        open_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_open_bit))
+                        closed_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_close_bit))
+                        # print("open output", open_output)
+                        if open_output and closed_output: 
+                            state[key] = 1
+                        elif open_output and not closed_output:
+                            state[key] = 0
+                        elif not open_output and closed_output:
+                            # print("setting gripper to 1")
+                            state[key] = 1
+                    else:
+                        state[key] = np.array(getattr(rtde_r, 'get'+key)())
+
+                        
                 state['robot_receive_timestamp'] = time.time()
                 self.ring_buffer.put(state)
 
@@ -334,6 +397,10 @@ class RTDEInterpolationController(mp.Process):
                             last_waypoint_time=last_waypoint_time
                         )
                         last_waypoint_time = target_time
+                    elif cmd == Command.GRIPPER.value:
+                        status = bool(commands['gripper_status'][i])
+                        rtde_io.setToolDigitalOut(1, status)
+                        rtde_io.setToolDigitalOut(0, not status)
                     else:
                         keep_running = False
                         break
@@ -358,7 +425,5 @@ class RTDEInterpolationController(mp.Process):
             rtde_c.stopScript()
             rtde_c.disconnect()
             rtde_r.disconnect()
+            rtde_io.disconnect()
             self.ready_event.set()
-
-            if self.verbose:
-                print(f"[RTDEPositionalController] Disconnected from robot: {robot_ip}")

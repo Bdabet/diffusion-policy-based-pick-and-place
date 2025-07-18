@@ -251,6 +251,10 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
             target = trajectory
         else:
             raise ValueError(f"Unsupported prediction type {pred_type}")
+        
+        # print("predicted vs target")
+        # print(f"preditced: {pred} vs target: {target}")
+        # print(f"predicted - target ={pred - target}")
 
         loss = F.mse_loss(pred, target, reduction='none')
         loss = loss * loss_mask.type(loss.dtype)
