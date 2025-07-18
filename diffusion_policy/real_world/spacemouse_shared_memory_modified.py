@@ -148,26 +148,26 @@ class Spacemouse(mp.Process):
             try:
                 if key.char == "w":
                     key_states['up'] = 50
-                    print("up pressed")
-                elif key.char == "x":
+                    # print("up pressed")
+                elif key.char == "s":
                     key_states['down'] = -50
-                    print("down pressed")
+                    # print("down pressed")
                 elif key.char == "a":
                     key_states['left'] = -50
-                    print("left pressed")
+                    # print("left pressed")
                 elif key.char == "d":
                     key_states['right'] = 50
-                    print("right pressed")
+                    # print("right pressed")
                 
             except:
                 pass
 
         def on_release(key):
             try:
-                if key.char == "w" or key.char == "x":
+                if key.char == "w" or key.char == "s":
                     key_states['up'] = 0
                     key_states['down'] = 0
-                    print("up/down released")
+                    # print("up/down released")
                 elif key.char == "a" or key.char == "d":
                     key_states['left'] = 0
                     key_states['right'] = 0

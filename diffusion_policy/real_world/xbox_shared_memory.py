@@ -151,9 +151,16 @@ class Spacemouse(mp.Process):
             # print("joystick_read",joystick.read())
             
 
-            self.motion_event[0] = joystick.read()[0]  # X
-            self.motion_event[1] = joystick.read()[1]  # Y
-            self.motion_event[2] = 0                   # Z unused
+            self.motion_event[0] = joystick.read()[1]*100  # X
+            self.motion_event[1] = joystick.read()[0]*100  # Y
+            if joystick.read()[2] > 0:
+                self.motion_event[2] = 50
+            elif joystick.read()[3] > 0:
+                self.motion_event[2] = -50
+            else:
+                self.motion_event[2] = 0
+
+            # self.motion_event[2] = 0                   # Z unused
             self.motion_event[6] = 1                   # dummy
 
             # print(f"motion_event: {self.motion_event}")

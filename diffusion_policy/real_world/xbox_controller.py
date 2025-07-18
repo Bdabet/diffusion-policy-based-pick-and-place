@@ -35,10 +35,14 @@ class XboxController(object):
 
 
     def read(self): # return the buttons/triggers that you care about in this methode
-        x = self.LeftJoystickX*50
-        y = self.LeftJoystickY*50
+        x = self.LeftJoystickX + self.LeftDPad*10 + self.RightDPad*10
+        y = self.LeftJoystickY + self.UpDPad + self.DownDPad
+        up =  self.RightBumper
+        down = self.RightTrigger
+        
+
        
-        return [x, y]
+        return [x, y, up, down]
 
 
     def _monitor_controller(self):
