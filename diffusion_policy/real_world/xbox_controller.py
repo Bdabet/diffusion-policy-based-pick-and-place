@@ -40,9 +40,12 @@ class XboxController(object):
         up =  self.RightBumper
         down = self.RightTrigger
         Y_button = self.X
+        X_button = self.Y
+        A_button = self.A
+
 
        
-        return [x, y, up, down, Y_button]
+        return [x, y, up, down, Y_button,X_button, A_button]
 
 
     def _monitor_controller(self):

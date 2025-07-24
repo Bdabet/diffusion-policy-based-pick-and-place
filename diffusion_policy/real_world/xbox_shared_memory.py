@@ -13,7 +13,7 @@ class Spacemouse(mp.Process):
             max_value=500, 
             deadzone=(0,0,0,0,0,0), 
             dtype=np.float32,
-            n_buttons=1,
+            n_buttons=3,
             ):
         """
         Continuously listen to 3D connection space naviagtor events
@@ -141,38 +141,61 @@ class Spacemouse(mp.Process):
         # print("in sm.run")
         self.ready_event.set()
 
-        joystick = XboxController()
+        controller = XboxController()
+
+        clockwise_rotation = 0
+        aniclockwise_rotation = 0
 
         
 
         
         while not self.stop_event.is_set():
             
-            # print("joystick_read",joystick.read())
-            
+            # print("contorller_read",contorller.read())
 
-            if abs(joystick.read()[1]) > 0.1:
-                self.motion_event[0] = -joystick.read()[1]*120  # X
+            buttons_state = controller.read()
+
+            # record x movememnts
+            if abs(buttons_state[1]) > 0.1:
+                self.motion_event[0] = -buttons_state[1]*120  # X
             else:
                 self.motion_event[0] = 0
-            if abs(joystick.read()[0]) > 0.1:
-                self.motion_event[1] = -joystick.read()[0]*120  # Y
+
+            # record y movements 
+            if abs(buttons_state[0]) > 0.1:
+                self.motion_event[1] = -buttons_state[0]*120  # Y
             else:
                 self.motion_event[1] = 0
-            if joystick.read()[2] > 0:
+
+            
+            # record z movements
+            if buttons_state[2] > 0:
                 self.motion_event[2] = 50
-            elif joystick.read()[3] > 0:
+            elif buttons_state[3] > 0:
                 self.motion_event[2] = -50
             else:
                 self.motion_event[2] = 0
 
-            # self.motion_event[2] = 0                   # Z unused
+            # record rotations
+            if buttons_state[5] > 0: # X_button
+                clockwise_rotation = 1
+            elif buttons_state[5] == 0:
+                clockwise_rotation = 0
+
+            if buttons_state[6] > 0: # A_button
+                aniclockwise_rotation = 1
+            elif buttons_state[6] == 0:
+                aniclockwise_rotation= 0
+            
+            
             self.motion_event[6] = 1                   # dummy
 
             # print(f"motion_event: {self.motion_event}")
 
 
-            self.button_state[0] = joystick.read()[4]
+            self.button_state[0] = buttons_state[4]
+            self.button_state[1] = clockwise_rotation
+            self.button_state[2] = aniclockwise_rotation
             # print("button state intern", self.button_state)
 
             self.ring_buffer.put({

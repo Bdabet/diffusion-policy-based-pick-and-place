@@ -19,6 +19,7 @@ class Command(enum.Enum):
     SERVOL = 1
     SCHEDULE_WAYPOINT = 2
     GRIPPER = 3
+    rotation = 4
 
 class RTDEInterpolationController(mp.Process):
     """
@@ -103,12 +104,13 @@ class RTDEInterpolationController(mp.Process):
             'target_pose': np.zeros((6,), dtype=np.float64),
             'duration': 0.0,
             'target_time': 0.0,
+            'joints_angles' : np.zeros((6), dtype=np.float64),
             'gripper_status': 0
         }
         input_queue = SharedMemoryQueue.create_from_examples(
             shm_manager=shm_manager,
             examples=example,
-            buffer_size=512
+            buffer_size = 1024 
         )
 
         # build ring buffer
@@ -217,8 +219,20 @@ class RTDEInterpolationController(mp.Process):
             'target_pose': np.zeros(6),
             'duration': 0.0,
             'target_time': 0.0,
+            'joints_angles' : np.zeros(6),
             'gripper_status': int(status)
         })
+    
+    def joint_rotation(self, joint_angles):
+        self.input_queue.put({
+            'cmd': Command.rotation.value,
+            'target_pose': np.zeros(6),
+            'duration': 0.0,
+            'target_time': 0.0,
+            'joints_angles' : joint_angles,
+            'gripper_status': 0
+        })
+        
 
     # ========= command methods ============
     
@@ -235,6 +249,7 @@ class RTDEInterpolationController(mp.Process):
             'target_pose': pose,
             'duration': duration,
             'target_time': 0.0,
+            'joints_angles' : np.zeros(6),
             'gripper_status': 0
         })
             
@@ -246,6 +261,7 @@ class RTDEInterpolationController(mp.Process):
             'target_pose': pose,
             'duration': 0.0,
             'target_time': target_time,
+            'joints_angles' : np.zeros(6),
             'gripper_status': 0
         })
 
@@ -264,6 +280,8 @@ class RTDEInterpolationController(mp.Process):
         if self.soft_real_time:
             os.sched_setscheduler(
                 0, os.SCHED_RR, os.sched_param(20))
+        
+        first_rot_received = False
 
         rtde_c = RTDEControlInterface(hostname=self.robot_ip)
         rtde_r = RTDEReceiveInterface(hostname=self.robot_ip)
@@ -317,6 +335,21 @@ class RTDEInterpolationController(mp.Process):
                     dt, 
                     self.lookahead_time, 
                     self.gain)
+                
+
+                # rtde_c.servoStop()
+                # time.sleep(0.01)
+
+                # if first_rot_received:
+                #     assert rtde_c.servoJ(target_joint_angles,
+                #             vel, acc, # dummy, not used by ur5
+                #             dt, 
+                #             self.lookahead_time, 
+                #             self.gain)
+                    
+                
+                    
+                
                 
                 # update robot state
                 state = dict()
@@ -401,6 +434,17 @@ class RTDEInterpolationController(mp.Process):
                         status = bool(commands['gripper_status'][i])
                         rtde_io.setToolDigitalOut(1, status)
                         rtde_io.setToolDigitalOut(0, not status)
+                    elif cmd == Command.rotation.value:
+                        
+                        target_joint_angles = np.array(command['joints_angles'])
+                        assert target_joint_angles.shape == (6,)
+                        # print("must move joint with target pose", target_joint_angles)
+                        first_rot_received = True
+                        
+                        
+                        # assert rtde_c.moveJ(target_joint_angles, 1.05, 1.4)
+                        
+                        # rtde_c.moveJ(target_joint_angles, self.joints_init_speed, 1.4)
                     else:
                         keep_running = False
                         break

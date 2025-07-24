@@ -157,7 +157,7 @@ class RealEnv:
             )
 
         cube_diag = np.linalg.norm([1,1,1])
-        j_init = np.array([-144,-120,-101,-50,90,-90]) / 180 * np.pi
+        j_init = np.array([-144.2,-112.4,-103.4,-54.2,90.4,-144]) / 180 * np.pi
         if not init_joints:
             j_init = None
         # print(f"j_init: {j_init}")
@@ -344,10 +344,15 @@ class RealEnv:
         # convert action to pose
         receive_time = time.time()
         is_new = timestamps > receive_time
-        new_actions = actions[is_new] 
+        # new_actions = actions[is_new] 
         new_robot_actions = actions[is_new][:, :6] #adjusted to exclude gripper part
         
         new_gripper_actions = actions[is_new][:,6]
+        # print("gripper actions",new_gripper_actions)
+        new_timestamps = timestamps[is_new]
+        new_stages = stages[is_new]
+
+        new_rotation_actions = actions[is_new][:,7:]
         # print("gripper actions",new_gripper_actions)
         new_timestamps = timestamps[is_new]
         new_stages = stages[is_new]
@@ -368,6 +373,10 @@ class RealEnv:
             elif action == 0:
                 self.robot.gripper_command(False)
                 #send open command
+        
+        for action in new_rotation_actions:
+            # print("sending rotation action", action)
+            self.robot.joint_rotation(new_rotation_actions)
                 
         
         

@@ -35,7 +35,7 @@ class RealEnv:
             output_dir,
             robot_ip,
             # env params
-            frequency=10,
+            frequency=500,
             n_obs_steps=2,
             # obs
             obs_image_resolution=(640,480),
