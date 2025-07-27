@@ -373,14 +373,7 @@ class RealEnv:
             elif action == 0:
                 self.robot.gripper_command(False)
                 #send open command
-        
-        for action in new_rotation_actions:
-            # print("sending rotation action", action)
-            self.robot.joint_rotation(new_rotation_actions)
-                
-        
-        
-        
+ 
         # record actions
         if self.action_accumulator is not None:
             self.action_accumulator.put(

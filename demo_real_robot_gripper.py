@@ -29,7 +29,7 @@ from diffusion_policy.real_world.xbox_shared_memory import Spacemouse
 from diffusion_policy.common.precise_sleep import precise_wait
 from diffusion_policy.real_world.keystroke_counter import (
     KeystrokeCounter, Key, KeyCode)
-from scipy.spatial.transform import Rotation as R
+
 
 @click.command()
 @click.option('--output', '-o', required=True, help="Directory to save demonstration dataset.")
@@ -66,8 +66,6 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 shm_manager=shm_manager
             ) as env:
 
-            # print("RealEnv initialized! 2")
-
             cv2.setNumThreads(1)
             
 
@@ -83,39 +81,25 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
             print('Ready!')
             state = env.get_robot_state()
             print(f'Robot state: {state}')
-            target_pose = state['TargetTCPPose']
-            action_array = np.zeros(13)
-            # action_array = np.append(action_array, 0) # add extra values for gripper
-            # print(f'Robot target pose + other values: {action_array}')
 
-            # initialize gripper state to 0
+            # initialze target pose, acction array and gripper state to 0
+            target_pose = state['TargetTCPPose']
+            action_array = np.zeros(7)
             gripper_state = 0
 
             t_start = time.monotonic()
             iter_idx = 0
             stop = False
             is_recording = False
+
             while not stop:
                 # calculate timing
                 t_cycle_end = t_start + (iter_idx + 1) * dt
                 t_sample = t_cycle_end - command_latency
                 t_command_target = t_cycle_end + dt
 
-                # inital gripper state always set rto 0
-
-
-                robot_state = env.robot.get_all_state()
-
-
-                # print ("shape", np.shape(robot_state["ActualQ"])) #(30,6)
-                # print("current angles",robot_state["ActualQ"][-1, :])
-
-                current_joint_angles = robot_state["ActualQ"][-1, :]
-
-
 
                 # print("waiting for press events")
-
 
                 # handle key presses
                 press_events = key_counter.get_press_events()
@@ -153,48 +137,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 # get teleop command
                 sm_state = sm.get_motion_state()
 
-                print("sm state", sm_state)
-
-
-
-                button_cicked = sm.get_button_state()
-                if button_cicked[0]:
-                    gripper_state = not gripper_state
-
-
-                if button_cicked[1]:
-                    # convert target pose to euler format
-                    target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
-                    
-
-                    # rotate target pose around local z
-                    target_pose = rotate_around_local_z(target_pose, 1)
-                    
-
-                    # convert target pose back to rotvec
-                    target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
-                    
-                    
-                    
-                    
-                elif button_cicked[2]:
-
-                    # convert target pose to euler format
-                    target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
-                    
-
-                    # rotate target pose around local z
-                    target_pose = rotate_around_local_z(target_pose, -1)
-                    
-
-                    # convert target pose back to rotvec
-                    target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
-                
-
-
-
-                # print(f"sm_state: {sm_state}")
-                
+                # print("sm state", sm_state)
 
                 dpos = sm_state[:3] * (env.max_pos_speed / frequency)
                 if np.any(dpos != 0):
@@ -204,37 +147,36 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 
                 target_pose[:3] += dpos
 
-                
-                
-                
-                
-                
-                print("final target psoe ", target_pose)
+
+                # handle gripper commands
+                button_cicked = sm.get_button_state()
+                if button_cicked[0]:
+                    gripper_state = not gripper_state
+
+                # handle rotation commands
+                if button_cicked[1]:
+                    # convert target pose to euler format
+                    target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
+                    
+                    # rotate target pose around local z
+                    target_pose = sm.rotate_around_local_z(target_pose, 1)
+                    
+                    # convert target pose back to rotvec
+                    target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
 
 
+                elif button_cicked[2]:
 
-                # print("new j angles", new_joint_angles)
-                # int(f"target_pose: {target_pose}")
+                    # convert target pose to euler format
+                    target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
+                    
+                    # rotate target pose around local z
+                    target_pose = sm.rotate_around_local_z(target_pose, -1)
 
-                
-                
-                
-
-
-                # if button_cicked[1]:
-                #     # clockwise rotation
-                #     new_joint_angles = current_joint_angles.copy()
-                #     # target_pose[5] = target_pose[5] + np.deg2rad(1)
-                #     target_pose = rotate_around_local_z(target_pose, 1)
-                #     # print("rotated pose", rotate_around_local_z(target_pose, 5))
-                #     # print("clockwise", new_joint_angles)
-                # elif button_cicked[2]:
-                #     # aniclockwise rotation
-                #     new_joint_angles = current_joint_angles.copy()
-                #     # new_joint_angles[5] = new_joint_angles[5] - np.deg2rad(1)
-                #     # target_pose[5] = target_pose[5] - np.deg2rad(1)
-                # else:
-                #     new_joint_angles = current_joint_angles.copy()
+                    # convert target pose back to rotvec
+                    target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
+               
+                # print("final target pose ", target_pose)
 
                 
 
@@ -242,17 +184,12 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 action_array[:6] = target_pose
                 action_array[6] = float(gripper_state == True)
                 
-                # action_array[6:12] = new_joint_angles
-                
-                # action_array = np.concatenate((target_pose, int(gripper_state == 'true'), new_joint_angles), axis = 0)
-                # action_array[6:] = new_joint_angles[:] 
-                
-                
-             
+
+                             
 
                 
 
-                print("action array", action_array)
+                # print("action array", action_array)
                
                 
                 # execute teleop command
@@ -261,66 +198,10 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                     actions=[action_array], 
                     timestamps=[t_command_target-time.monotonic()+time.time()],
                     stages=[stage])
-                precise_wait(t_cycle_end)    # print("rotated pose", rotate_around_local_z(target_pose, 5))
-                    # print("clockwise", new_joint_angles)if first_rot_received:
-                #     assert rtde_c.servoJ(target_joint_angles,
-                #             vel, acc, # dummy, not used by ur5
-                #             dt, 
-                #             self.lookahead_time, 
-                #             self.gain)
+                precise_wait(t_cycle_end)   
                 iter_idx += 1
+
                 # print(f"iter_idx: {iter_idx}, t_cycle_end: {t_cycle_end}, t_command_target: {t_command_target}")
-
-
-def rotate_around_local_z(grasping_pose, rotation_angle, robot_angle_offset = 45):
-    
-    # Current rotation based on the grasping pose
-    r_current = R.from_euler('xyz', grasping_pose[3:], degrees=False)
-
-    
-    r_local_z = R.from_euler('z', np.deg2rad(rotation_angle), degrees=False)
-    
-        
-
-    # Combine the rotations
-    r_new = r_current * r_local_z
-
-    # debug 
-    # print("r_new", r_new.as_euler('xyz', degrees=True))
-
-    # Update the final grasping pose
-    grasping_pose = np.concatenate((grasping_pose[:3], r_new.as_euler('xyz', degrees=False)), axis=None)
-
-    return grasping_pose
-# %%
-
-def rotate_tcp_z_axis_rpy(pose_rpy: np.ndarray, angle_deg: float) -> np.ndarray:
-    
-    # Extract position and orientation
-    position = pose_rpy[:3]
-    rpy = pose_rpy[3:]
-
-    # Convert RPY to rotation matrix
-    rot = R.from_euler('xyz', rpy)
-    rot_matrix = rot.as_matrix()
-
-    # Define rotation around local Z-axis of TCP
-    angle_rad = np.deg2rad(angle_deg)
-    Rz = np.array([
-        [np.cos(angle_rad), -np.sin(angle_rad), 0],
-        [np.sin(angle_rad),  np.cos(angle_rad), 0],
-        [0,                 0,                  1]
-    ])
-
-    # Apply rotation in TCP frame: R_new = R_current @ Rz
-    new_rot_matrix = rot_matrix @ Rz
-    new_rpy = R.from_matrix(new_rot_matrix).as_euler('xyz')
-
-    # Combine new orientation with original position
-    return np.concatenate([position, new_rpy])
-
-
-
 
 
 
