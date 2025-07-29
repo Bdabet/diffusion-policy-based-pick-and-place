@@ -39,7 +39,7 @@ class XboxController(object):
         y = self.LeftJoystickY + self.UpDPad + self.DownDPad
         up =  self.RightBumper
         down = self.RightTrigger
-        Y_button = self.X
+        Y_button = self.B
         X_button = self.Y
         A_button = self.A
 

@@ -4,7 +4,7 @@ import time
 # from spnav import spnav_open, spnav_poll_event, spnav_close, SpnavMotionEvent, SpnavButtonEvent
 from diffusion_policy.shared_memory.shared_memory_ring_buffer import SharedMemoryRingBuffer
 from diffusion_policy.real_world.xbox_controller import XboxController
-from scipy.spatial.transform import Rotation as R
+
 
 class Spacemouse(mp.Process):
     def __init__(self, 
@@ -101,26 +101,7 @@ class Spacemouse(mp.Process):
         tf_state[3:] = self.tx_zup_spnav @ state[3:]
         return tf_state
     
-    def rotate_around_local_z(grasping_pose, rotation_angle):
-    
-        # Current rotation based on the grasping pose
-        r_current = R.from_euler('xyz', grasping_pose[3:], degrees=False)
 
-        
-        r_local_z = R.from_euler('z', np.deg2rad(rotation_angle), degrees=False)
-        
-            
-
-        # Combine the rotations
-        r_new = r_current * r_local_z
-
-        # debug 
-        # print("r_new", r_new.as_euler('xyz', degrees=True))
-
-        # Update the final grasping pose
-        grasping_pose = np.concatenate((grasping_pose[:3], r_new.as_euler('xyz', degrees=False)), axis=None)
-
-        return grasping_pose
 
 
     def get_button_state(self):
