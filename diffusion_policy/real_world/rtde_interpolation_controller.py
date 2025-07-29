@@ -150,12 +150,11 @@ class RTDEInterpolationController(mp.Process):
                     example[key] = 1
                 open_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_open_bit))
                 closed_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_close_bit))
-                if open_output and closed_output: 
-                    example[key] = 1
-                elif open_output and not closed_output:
-                    example[key] = 0
+            
+                if open_output and not closed_output:
+                    example[key] = np.array([0])
                 elif not open_output and closed_output:
-                    example[key] = 1
+                    example[key] = np.array([1])
             else:
                 example[key] = np.array(getattr(rtde_r, 'get'+key)())
 
@@ -358,10 +357,10 @@ class RTDEInterpolationController(mp.Process):
                         open_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_open_bit))
                         closed_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_close_bit))
                         if open_output and not closed_output:
-                            state[key] = 0
+                            state[key] = np.array([0])
                         elif not open_output and closed_output:
                             # print("setting gripper to 1")
-                            state[key] = 1
+                            state[key] = np.array([1])
                     else:
                         state[key] = np.array(getattr(rtde_r, 'get'+key)())
 
