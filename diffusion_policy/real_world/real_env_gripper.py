@@ -344,7 +344,7 @@ class RealEnv:
         # convert action to pose
         receive_time = time.time()
         is_new = timestamps > receive_time
-        # new_actions = actions[is_new] 
+        new_actions = actions[is_new] 
         new_robot_actions = actions[is_new][:, :6] #adjusted to exclude gripper part
         
         new_gripper_actions = actions[is_new][:,6]
@@ -352,10 +352,7 @@ class RealEnv:
         new_timestamps = timestamps[is_new]
         new_stages = stages[is_new]
 
-        new_rotation_actions = actions[is_new][:,7:]
-        # print("gripper actions",new_gripper_actions)
-        new_timestamps = timestamps[is_new]
-        new_stages = stages[is_new]
+        
 
         # print("schedule waypoints")
         # schedule waypoints
@@ -377,7 +374,7 @@ class RealEnv:
         # record actions
         if self.action_accumulator is not None:
             self.action_accumulator.put(
-                new_robot_actions,
+                new_actions,
                 new_timestamps
             )
         if self.stage_accumulator is not None:
