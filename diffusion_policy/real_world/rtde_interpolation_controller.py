@@ -46,8 +46,8 @@ class RTDEInterpolationController(mp.Process):
             verbose=False,
             receive_keys=None,
             get_max_k=128,
-            gripper_open_bit = 16,
-            gripper_close_bit = 17
+            gripper_open_bit = 17,
+            gripper_close_bit = 16
             ):
         """
         frequency: CB2=125, UR3e=500
@@ -137,8 +137,6 @@ class RTDEInterpolationController(mp.Process):
         example = dict()
         for key in receive_keys:
 
-            
-            
             if key == 'OpenDigitalOutState':
                 example[key] = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_open_bit))
             elif key == 'ClosedDigitalOutState':
@@ -146,9 +144,7 @@ class RTDEInterpolationController(mp.Process):
             elif key == 'GripperState':
                 open_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_open_bit))
                 closed_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_close_bit))
-                if open_output and closed_output: 
-                    example[key] = 1
-                elif open_output and not closed_output:
+                if open_output and not closed_output:
                     example[key] = 0
                 elif not open_output and closed_output:
                     example[key] = 1
@@ -361,10 +357,7 @@ class RTDEInterpolationController(mp.Process):
                     elif key == 'GripperState':
                         open_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_open_bit))
                         closed_output = np.array(getattr(rtde_r, 'getDigitalOutState')(self.gripper_close_bit))
-                        # print("open output", open_output)
-                        if open_output and closed_output: 
-                            state[key] = 1
-                        elif open_output and not closed_output:
+                        if open_output and not closed_output:
                             state[key] = 0
                         elif not open_output and closed_output:
                             # print("setting gripper to 1")
@@ -432,8 +425,8 @@ class RTDEInterpolationController(mp.Process):
                         last_waypoint_time = target_time
                     elif cmd == Command.GRIPPER.value:
                         status = bool(commands['gripper_status'][i])
-                        rtde_io.setToolDigitalOut(1, status)
-                        rtde_io.setToolDigitalOut(0, not status)
+                        rtde_io.setToolDigitalOut(1, not status)
+                        rtde_io.setToolDigitalOut(0,   status)
                     elif cmd == Command.rotation.value:
                         
                         target_joint_angles = np.array(command['joints_angles'])
