@@ -258,6 +258,20 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                         del mse
                 
                 # checkpoint
+
+                # Save epoch-specific checkpoint
+                current_epoch_tag = f"epoch_{self.epoch:04d}"
+                prev_epoch_tag = f"epoch_{self.epoch - 1:04d}"
+
+                # Save current epoch checkpoint
+                current_ckpt_path = self.save_checkpoint(tag=current_epoch_tag, use_thread=False)
+
+                # Delete previous epoch checkpoint if it exists
+                prev_ckpt_path = pathlib.Path(self.output_dir).joinpath('checkpoints', f'{prev_epoch_tag}.ckpt')
+                if prev_ckpt_path.exists():
+                    prev_ckpt_path.unlink()
+
+                    
                 if (self.epoch % cfg.training.checkpoint_every) == 0:
                     # checkpointing
                     if cfg.checkpoint.save_last_ckpt:
