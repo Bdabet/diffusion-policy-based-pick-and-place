@@ -102,7 +102,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 t_command_target = t_cycle_end + dt
 
                 # pump obs
-                obs = env.get_obs()
+                env.get_obs()
 
                 # print("waiting for press events")
 
