@@ -123,8 +123,7 @@ class RealPushTImageDataset(BaseImageDataset):
             n_episodes=replay_buffer.n_episodes, 
             val_ratio=val_ratio,
             seed=seed)
-        
-
+        train_mask = ~val_mask
         train_mask = downsample_mask(
             mask=train_mask, 
             max_n=max_train_episodes, 
@@ -250,7 +249,7 @@ def _get_replay_buffer(dataset_path, shape_meta, store):
                 assert tuple(shape) in [(2,),(6,)]
     
     action_shape = tuple(shape_meta['action']['shape'])
-    assert action_shape in [(2,),(6,),(7,)]
+    assert action_shape in [(7,)]
 
     # load data
     cv2.setNumThreads(1)

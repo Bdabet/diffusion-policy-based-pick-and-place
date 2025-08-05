@@ -1,4 +1,4 @@
-name: real_image
+name: pick_and_place
 
 image_shape: [3, 240, 320]
 dataset_path: data/pusht_real/real_pusht_20230105
@@ -12,9 +12,9 @@ shape_meta: &shape_meta
     camera_1:
       shape: ${task.image_shape}
       type: rgb
-    # camera_2:
-    #   shape: ${task.image_shape}
-    #   type: rgb
+    camera_2:
+      shape: ${task.image_shape}
+      type: rgb
     # camera_3:
     #   shape: ${task.image_shape}
     #   type: rgb
@@ -24,7 +24,7 @@ shape_meta: &shape_meta
     robot_eef_pose:
       shape: [6]
       type: low_dim
-    Gripper_state:
+    gripper_state:
       shape: [1]
       type: low_dim
   action: 
@@ -34,7 +34,7 @@ env_runner:
   _target_: diffusion_policy.env_runner.real_pusht_image_runner.RealPushTImageRunner
 
 dataset:
-  _target_: diffusion_policy.dataset.real_pusht_image_dataset.RealPushTImageDataset
+  _target_: diffusion_policy.dataset.pick_and_place_dataset.RealPushTImageDataset
   shape_meta: *shape_meta
   dataset_path: ${task.dataset_path}
   horizon: ${horizon}

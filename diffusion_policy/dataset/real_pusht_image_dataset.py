@@ -126,24 +126,28 @@ class RealPushTImageDataset(BaseImageDataset):
         
         #adjustemts for limit
 
-        # train_mask = ~val_mask
+        
 
-        # Limit to episodes 0 to 89
-        max_episode_idx = 89
-        valid_episode_mask = np.zeros(replay_buffer.n_episodes, dtype=bool)
-        valid_episode_mask[:max_episode_idx] = True
+        # # Limit to episodes 0 to 89
+        # max_episode_idx = 89
+        # valid_episode_mask = np.zeros(replay_buffer.n_episodes, dtype=bool)
+        # valid_episode_mask[:max_episode_idx] = True
 
-        # Now apply validation split **only on allowed episodes**
-        val_mask = get_val_mask(
-            n_episodes=replay_buffer.n_episodes,
-            val_ratio=val_ratio,
-            seed=seed)
+        # # Now apply validation split **only on allowed episodes**
+        # val_mask = get_val_mask(
+        #     n_episodes=replay_buffer.n_episodes,
+        #     val_ratio=val_ratio,
+        #     seed=seed)
 
-        # Remove episodes >= 89 from validation and training
-        val_mask = np.logical_and(val_mask, valid_episode_mask)
-        train_mask = np.logical_and(~val_mask, valid_episode_mask)
+        
+
+        # # Remove episodes >= 89 from validation and training
+        # val_mask = np.logical_and(val_mask, valid_episode_mask)
+        # train_mask = np.logical_and(~val_mask, valid_episode_mask)
 
         #end of adjustemnts
+
+        train_mask = ~val_mask
 
 
         train_mask = downsample_mask(

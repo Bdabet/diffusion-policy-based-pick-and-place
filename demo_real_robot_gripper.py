@@ -29,6 +29,7 @@ from diffusion_policy.real_world.xbox_shared_memory import Spacemouse
 from diffusion_policy.common.precise_sleep import precise_wait
 from diffusion_policy.real_world.keystroke_counter import (
     KeystrokeCounter, Key, KeyCode)
+from diffusion_policy.common.transformation_related_functions import rotate_around_local_z
 
 
 @click.command()
@@ -85,6 +86,8 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
             # initialze target pose, acction array and gripper state to 0
             target_pose = state['TargetTCPPose']
             action_array = np.zeros(7)
+            
+            # start the grpper in open state
             gripper_state = 0
 
             t_start = time.monotonic()
@@ -98,6 +101,8 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 t_sample = t_cycle_end - command_latency
                 t_command_target = t_cycle_end + dt
 
+                # pump obs
+                env.get_obs()
 
                 # print("waiting for press events")
 
@@ -139,13 +144,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
 
                 # print("sm state", sm_state)
 
-                dpos = sm_state[:3] * (env.max_pos_speed / frequency)
-                if np.any(dpos != 0):
-                    print(f"dpos: {dpos}")
-
                 
-                
-                target_pose[:3] += dpos
 
 
                 # handle gripper commands
@@ -157,9 +156,11 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 if button_cicked[1]:
                     # convert target pose to euler format
                     target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
+                   
                     
                     # rotate target pose around local z
-                    target_pose = sm.rotate_around_local_z(target_pose, 1)
+                    target_pose = rotate_around_local_z(target_pose, 1)
+                    
                     
                     # convert target pose back to rotvec
                     target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
@@ -170,13 +171,24 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                     # convert target pose to euler format
                     target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
                     
+                    
                     # rotate target pose around local z
-                    target_pose = sm.rotate_around_local_z(target_pose, -1)
+                    target_pose = rotate_around_local_z(target_pose, -1)
+                    
 
                     # convert target pose back to rotvec
                     target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
                
                 # print("final target pose ", target_pose)
+
+
+                dpos = sm_state[:3] * (env.max_pos_speed / frequency)
+                if np.any(dpos != 0):
+                    print(f"dpos: {dpos}")
+
+                
+                
+                target_pose[:3] += dpos
 
                 
 
