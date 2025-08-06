@@ -94,6 +94,7 @@ def real_data_to_replay_buffer(
     n_cameras = 0
     camera_idxs = set() 
     if image_keys is not None:
+        image_keys = [k for k in image_keys if 'last_frame' not in k] # Only include the main camera keys, skip *_last_frame
         n_cameras = len(image_keys)
         camera_idxs = set(int(x.split('_')[-1]) for x in image_keys)
     else:
@@ -209,6 +210,7 @@ def real_data_to_replay_buffer(
 
                     # Fill the last-frame array for each step in this episode
                     for i in range(episode_length):
+
                         if len(futures) >= max_inflight_tasks:
                             # limit number of inflight tasks
                             completed, futures = concurrent.futures.wait(futures, 
