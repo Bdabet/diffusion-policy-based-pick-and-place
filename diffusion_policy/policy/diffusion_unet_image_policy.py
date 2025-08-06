@@ -144,7 +144,7 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
         global_cond = None
         if self.obs_as_global_cond:
             # condition through global feature
-            this_nobs = dict_apply(nobs, lambda x: x[:,:To,...].reshape(-1,*x.shape[2:]))
+            this_nobs = dict_apply(nobs, lambda x: x[:,:To,...].reshape(-1,*x.shape[2:])) # reshaping step
             nobs_features = self.obs_encoder(this_nobs)
             # reshape back to B, Do
             global_cond = nobs_features.reshape(B, -1)
