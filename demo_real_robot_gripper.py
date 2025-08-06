@@ -144,8 +144,6 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
 
                 # print("sm state", sm_state)
 
-                
-
 
                 # handle gripper commands
                 button_cicked = sm.get_button_state()
@@ -190,16 +188,9 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 
                 target_pose[:3] += dpos
 
-                
-
-
                 action_array[:6] = target_pose
                 action_array[6] = float(gripper_state == True)
-                
 
-                             
-
-                
 
                 # print("action array", action_array)
                
