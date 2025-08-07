@@ -1,6 +1,6 @@
 """
 Usage:
-(robodiff)$ python eval_real_robot.py -i <ckpt_path> -o <save_dir> --robot_ip <ip_of_ur5>
+(robodiff)$ python eval_real_robot_gripper.py -i <ckpt_path> -o <save_dir> --robot_ip <ip_of_ur5>
 
 ================ Human in control ==============
 Robot movement:
@@ -33,7 +33,8 @@ import pathlib
 import skvideo.io
 from omegaconf import OmegaConf
 import scipy.spatial.transform as st
-from diffusion_policy.real_world.real_env import RealEnv
+#from diffusion_policy.real_world.real_env import RealEnv
+from diffusion_policy.real_world.real_env_gripper import RealEnv
 # from diffusion_policy.real_world.spacemouse_shared_memory_modified import Spacemouse
 from diffusion_policy.real_world.xbox_shared_memory import Spacemouse
 from diffusion_policy.common.precise_sleep import precise_wait
@@ -47,6 +48,7 @@ from diffusion_policy.common.cv2_util import get_image_transform
 from diffusion_policy.real_world.keystroke_counter import (
     KeystrokeCounter, Key, KeyCode
 )
+from diffusion_policy.common.transformation_related_functions import rotate_around_local_z
 
 
 OmegaConf.register_new_resolver("eval", eval, replace=True)
@@ -60,7 +62,7 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 @click.option('--vis_camera_idx', default=0, type=int, help="Which RealSense camera to visualize.")
 @click.option('--init_joints', '-j', is_flag=True, default=False, help="Whether to initialize robot joint configuration in the beginning.")
 @click.option('--steps_per_inference', '-si', default=6, type=int, help="Action horizon for inference.")
-@click.option('--max_duration', '-md', default=120, help='Max duration for each epoch in seconds.')
+@click.option('--max_duration', '-md', default=180, help='Max duration for each epoch in seconds.')
 @click.option('--frequency', '-f', default=10, type=float, help="Control frequency in Hz.")
 @click.option('--command_latency', '-cl', default=0.01, type=float, help="Latency between receiving SapceMouse command to executing on Robot in Sec.")
 def main(input, output, robot_ip, match_dataset, match_episode,
@@ -191,7 +193,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                     lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
                 result = policy.predict_action(obs_dict)
                 action = result['action'][0].detach().to('cpu').numpy()
-                assert action.shape[-1] == 2
+                assert action.shape[-1] == 7
                 del result
 
             print('Ready!')
@@ -204,6 +206,11 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                 state = env.get_robot_state()
                 # print(state)
                 target_pose = state['TargetTCPPose']
+                action_array = np.zeros(7)
+
+                # start the grpper in open state
+                gripper_state = 0
+
                 t_start = time.monotonic()
                 iter_idx = 0
                 while True:
@@ -216,41 +223,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                     # pump obs
                     # obs = env.get_obs()
 
-                    # visualize
-                    # episode_id = env.replay_buffer.n_episodes
-                    # # vis_img = obs[f'camera_{vis_camera_idx}'][-1]
-                    # match_episode_id = episode_id
-                    # if match_episode is not None:
-                    #     match_episode_id = match_episode
-                    # if match_episode_id in episode_first_frame_map:
-                    #     match_img = episode_first_frame_map[match_episode_id]
-                    #     ih, iw, _ = match_img.shape
-                    #     oh, ow, _ = vis_img.shape
-                    #     tf = get_image_transform(
-                    #         input_res=(iw, ih), 
-                    #         output_res=(ow, oh), 
-                    #         bgr_to_rgb=False)
-                    #     match_img = tf(match_img).astype(np.float32) / 255
-                    #     vis_img = np.minimum(vis_img, match_img)
-
-                    # text = f'Episode: {episode_id}'
-                    # cv2.putText(
-                    #     vis_img,
-                    #     text,
-                    #     (10,20),
-                    #     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                    #     fontScale=0.5,
-                    #     thickness=1,
-                    #     color=(255,255,255)
-                    # )
-                    # cv2.imshow('default', vis_img[...,::-1])
-
-                    # create blank black image to be able to read inputs
-                    # img = np.zeros((300, 300, 3), dtype=np.uint8)
-                    # print("image", img)
-
-                    # cv2.imshow("Window", img)
-                    # print("image shown")#
+                 
 
 
                     press_events = key_counter.get_press_events()
@@ -274,40 +247,59 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                     # get teleop command
                     sm_state = sm.get_motion_state()
                     # print(f"sm_state: {sm_state}")
+                    # handle gripper commands
+                    button_cicked = sm.get_button_state()
+                    if button_cicked[0]:
+                        gripper_state = not gripper_state
+
+                    # handle rotation commands
+                    if button_cicked[1]:
+                        # convert target pose to euler format
+                        target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
                     
-                    # print(f"sm_state{sm_state}")
+                        
+                        # rotate target pose around local z
+                        target_pose = rotate_around_local_z(target_pose, 1)
+                        
+                        
+                        # convert target pose back to rotvec
+                        target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
+
+
+                    elif button_cicked[2]:
+
+                        # convert target pose to euler format
+                        target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
+                        
+                        
+                        # rotate target pose around local z
+                        target_pose = rotate_around_local_z(target_pose, -1)
+                        
+
+                        # convert target pose back to rotvec
+                        target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
+                
+                    # print("final target pose ", target_pose)
+
+
                     dpos = sm_state[:3] * (env.max_pos_speed / frequency)
-                    # if np.any(dpos != 0):
-                    #     print(f"dpos: {dpos}")
-                    
-                    drot_xyz = sm_state[3:] * (env.max_rot_speed / frequency)
-                    drot_xyz[:] = 0
-                    
-                    # # commented out since no rotation is needed
-                    # if not sm.is_button_pressed(0):
-                    #     # translation mode
-                    #     drot_xyz[:] = 0
-                    # else:
-                    #     dpos[:] = 0
-                    # if not sm.is_button_pressed(1):
-                    #     # 2D translation mode
-                    #     dpos[2] = 0    
+                    if np.any(dpos != 0):
+                        print(f"dpos: {dpos}")
 
-                    # print("Before euler")
-                    drot = st.Rotation.from_euler('xyz', drot_xyz)
                     
-
-                    # old_pose = target_pose.copy()
-                    # print(f"old target pose: {old_pose}")
+                    
                     target_pose[:3] += dpos
-                    target_pose[3:] = (drot * st.Rotation.from_rotvec(
-                        target_pose[3:])).as_rotvec()
-                    # int(f"target_pose: {target_pose}")
-                    
+
+                    action_array[:6] = target_pose
+                    action_array[6] = float(gripper_state == True)
+
+
+                    # print("action array", action_array)
+
 
                     # execute teleop command
                     env.exec_actions(
-                        actions=[target_pose], 
+                        actions=[action_array], 
                         timestamps=[t_command_target-time.monotonic()+time.time()]
                         )
                     precise_wait(t_cycle_end)
@@ -348,9 +340,9 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         print('get_obs')
                         obs = env.get_obs()
 
-                        print ("observation", obs)
+                        # print ("observation", obs)
                         obs_timestamps = obs['timestamp']
-                        print(f'Obs latency {time.time() - obs_timestamps[-1]}')
+                        # print(f'Obs latency {time.time() - obs_timestamps[-1]}')
 
                         # run inference
                         with torch.no_grad():
@@ -363,6 +355,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             # print("result", result)
                             # this action starts from the first obs step
                             action = result['action'][0].detach().to('cpu').numpy()
+                            print("action", action)
                             print('Inference latency:', time.time() - s)
                         
                         # convert policy action to env actions
@@ -375,18 +368,22 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             perv_target_pose = this_target_pose
                             this_target_poses = np.expand_dims(this_target_pose, axis=0)
                         else:
-                            this_target_poses = np.zeros((len(action), len(target_pose)), dtype=np.float64)
-                            this_target_poses[:] = target_pose
-                            this_target_poses[:,[0,1]] = action
+                            this_target_poses = np.zeros((len(action), len(action_array)), dtype=np.float64)
+                            print("zeros target pose", this_target_poses)
+                            this_target_poses[:] = action_array
+                            print("initial target pose", this_target_poses)
+                            this_target_poses[:,:] = action
                             print("initially predicted target poses", this_target_poses)
+                            print("action 2", action)
 
                         # deal with timing
                         # the same step actions are always the target for
-                        action_timestamps = (np.arange(len(action), dtype=np.float64) + action_offset
+                        action_timestamps = (np.arange((len(action)), dtype=np.float64) + action_offset
                             ) * dt + obs_timestamps[-1]
                         action_exec_latency = 0.01
                         curr_time = time.time()
                         is_new = action_timestamps > (curr_time + action_exec_latency)
+                        print("after is new")
                         if np.sum(is_new) == 0:
                             # exceeded time budget, still do something
                             this_target_poses = this_target_poses[[-1]]
@@ -398,6 +395,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         else:
                             this_target_poses = this_target_poses[is_new]
                             action_timestamps = action_timestamps[is_new]
+                            
 
                         # # clip actions
 
@@ -410,7 +408,16 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         #     print("Unclipped:", unclipped_target_poses)
                         #     print("Clipped:", this_target_poses)
 
-                        print("sent target poses", this_target_poses)
+                        # print("this target poses after new", this_target_poses)
+                        # action_to_send = np.zeros_like(this_target_poses)
+                        # # rehsape action to send to add gripper column
+                        # np.zeros_like(-1, np.shape(this_target_poses)[1])
+                        # print("action to send 1")
+                        # action_to_send[:,:6] = this_target_poses[:,:6]
+                        # print("action to send 2")
+                        # action_to_send[:,6] = np.round(action[:,6])
+
+                        # print("sent action", action_to_send)
 
                         # execute actions
                         env.exec_actions(
@@ -419,45 +426,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         )
                         print(f"Submitted {len(this_target_poses)} steps of actions.")
 
-                        # if pause_enabled:
-                        #     pause_start_time = time.monotonic()
-                        #     print("Paused. Press 'r' to resume...")
-                        #     exit_pause_loop = False
-                        #     while True:
-                        #         press_events = key_counter.get_press_events()
-                        #         # print(f"Press events during pause: {press_events}")
-                        #         for key_stroke in press_events:
-                        #             if key_stroke == KeyCode(char='r'):
-                        #                 # paused_duration = time.monotonic() - pause_start_time
-                        #                 # print("paused_duration:", paused_duration)
-                        #                 # total_paused_time = total_paused_time + paused_duration
-                        #                 # print("total_paused_time:", total_paused_time)
-                        #                 print(f"Resumed after seconds pause.")
-                        #                 exit_pause_loop = True
-                        #                 break
-                                    
-                                    
-                        #         if exit_pause_loop:
-                        #             print("Exited pause loop.")
-                        #             break
-                                
-
-                        # # visualize
-                        # episode_id = env.replay_buffer.n_episodes
-                        # vis_img = obs[f'camera_{vis_camera_idx}'][-1]
-                        # text = 'Episode: {}, Time: {:.1f}'.format(
-                        #     episode_id, time.monotonic() - t_start
-                        # )
-                        # cv2.putText(
-                        #     vis_img,
-                        #     text,
-                        #     (10,20),
-                        #     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                        #     fontScale=0.5,
-                        #     thickness=1,
-                        #     color=(255,255,255)
-                        # )
-                        # cv2.imshow('default', vis_img[...,::-1])
+                        
 
                         # print("waiting for stop press event")
 
@@ -474,11 +443,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                                 terminate = True
                                 break
                             
-                            
-                                
-                        
 
-                       
                         
                         if time.monotonic() - t_start > max_duration:
                             terminate = True

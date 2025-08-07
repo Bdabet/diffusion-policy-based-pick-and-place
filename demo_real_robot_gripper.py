@@ -1,6 +1,6 @@
 """
 Usa
-(robodiff)$ python demo_real_robot.py -o <demo_save_dir> --robot_ip <ip_of_ur5>
+(robodiff)$ python demo_real_robot_gripper.py -o <demo_save_dir> --robot_ip <ip_of_ur5>
 
 Robot movement:
 Move your SpaceMouse to move the robot EEF (locked in xy plane).
@@ -83,7 +83,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
             state = env.get_robot_state()
             print(f'Robot state: {state}')
 
-            # initialze target pose, acction array and gripper state to 0
+            # initialze target pose, action array and set gripper state to 0
             target_pose = state['TargetTCPPose']
             action_array = np.zeros(7)
             
