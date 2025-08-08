@@ -32,14 +32,12 @@ def main(cfg: OmegaConf):
     cls = hydra.utils.get_class(cfg._target_)
     
     # Define custom output directory
-    # custom_output_dir = "/workspace/diffusion_policy/data/outputs/2025.07.10/13.09.43_train_diffusion_unet_image_real_image"
+    # custom_output_dir = "/workspace/diffusion_policy/data/outputs/2025.08.05/15.47.01_train_diffusion_unet_image_pick_and_place"
+    custom_output_dir = "/workspace/diffusion_policy/data/outputs/2025.08.08/train_diffusion_unet_image_pick_and_place_insertion_pp
     
-    
-    
-   
 
     # Initialize workspace with the custom output directory
-    workspace: BaseWorkspace = cls(cfg)
+    workspace: BaseWorkspace = cls(cfg, output_dir = custom_output_dir)
     # workspace: BaseWorkspace = cls(cfg)
     workspace.run()
 
