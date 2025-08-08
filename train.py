@@ -15,6 +15,7 @@ import hydra
 from omegaconf import OmegaConf
 import pathlib
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
+import os
 
 # allows arbitrary python code execution in configs using the ${eval:''} resolver
 OmegaConf.register_new_resolver("eval", eval, replace=True)
@@ -33,9 +34,10 @@ def main(cfg: OmegaConf):
     
     # Define custom output directory
     # custom_output_dir = "/workspace/diffusion_policy/data/outputs/2025.08.05/15.47.01_train_diffusion_unet_image_pick_and_place"
-    custom_output_dir = "/workspace/diffusion_policy/data/outputs/2025.08.08/train_diffusion_unet_image_pick_and_place_insertion_pp"
+    custom_output_dir = "/workspace/diffusion_policy/data/outputs/train_diffusion_unet_image_pick_and_place_insertion_pp"
+    if not os.path.exists(custom_output_dir):
+        os.makedirs(custom_output_dir)
     
-
     # Initialize workspace with the custom output directory
     workspace: BaseWorkspace = cls(cfg, output_dir = custom_output_dir)
     # workspace: BaseWorkspace = cls(cfg)
