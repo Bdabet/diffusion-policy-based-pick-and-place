@@ -33,7 +33,7 @@ def main(cfg: OmegaConf):
     
     # Define custom output directory
     # custom_output_dir = "/workspace/diffusion_policy/data/outputs/2025.08.05/15.47.01_train_diffusion_unet_image_pick_and_place"
-    custom_output_dir = "/workspace/diffusion_policy/data/outputs/2025.08.08/train_diffusion_unet_image_pick_and_place_insertion_pp
+    custom_output_dir = "/workspace/diffusion_policy/data/outputs/2025.08.08/train_diffusion_unet_image_pick_and_place_insertion_pp"
     
 
     # Initialize workspace with the custom output directory
