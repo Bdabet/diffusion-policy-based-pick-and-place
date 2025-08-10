@@ -86,7 +86,6 @@ class TrainRobomimicImageWorkspace(BaseWorkspace):
             **cfg.logging
         )
         
-        wandb.login(key = "64db7fbddb62aa9b361bac0b2415a533659da080")
         
         wandb.config.update(
             {

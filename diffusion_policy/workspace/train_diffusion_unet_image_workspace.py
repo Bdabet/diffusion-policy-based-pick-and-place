@@ -122,6 +122,8 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
             }
         )
 
+        wandb.login(key = "64db7fbddb62aa9b361bac0b2415a533659da080")
+
         # configure checkpoint
         topk_manager = TopKCheckpointManager(
             save_dir=os.path.join(self.output_dir, 'checkpoints'),
