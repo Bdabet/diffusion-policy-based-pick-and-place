@@ -40,7 +40,7 @@ def main(cfg: OmegaConf):
         os.makedirs(custom_output_dir)
     
     # Initialize workspace with the custom output directory
-    workspace: BaseWorkspace = cls(cfg)
+    workspace: BaseWorkspace = cls(cfg, custom_output_dir)
     # workspace: BaseWorkspace = cls(cfg)
     workspace.run()
 
