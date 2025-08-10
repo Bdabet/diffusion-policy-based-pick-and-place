@@ -17,6 +17,8 @@ import pathlib
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 import os
 
+from pathlib import Path
+
 # allows arbitrary python code execution in configs using the ${eval:''} resolver
 OmegaConf.register_new_resolver("eval", eval, replace=True)
 
@@ -35,7 +37,8 @@ def main(cfg: OmegaConf):
     
     # Define custom output directory
     # custom_output_dir = "/workspace/diffusion_policy/data/outputs/2025.08.05/15.47.01_train_diffusion_unet_image_pick_and_place"
-    custom_output_dir = "/workspace/diffusion_policy/data/outputs/train_diffusion_unet_image_pick_and_place_insertion_pp"
+    custom_output_dir = Path(__file__).resolve().parent / "data" / "outputs" / "train_diffusion_unet_image_pick_and_place_insertion_pp"
+
     if not os.path.exists(custom_output_dir):
         os.makedirs(custom_output_dir)
     
