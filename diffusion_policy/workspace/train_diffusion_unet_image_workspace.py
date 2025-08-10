@@ -110,6 +110,9 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
             output_dir=self.output_dir)
         assert isinstance(env_runner, BaseImageRunner)
 
+        # set wandb API key for login
+        wandb.login(key = "64db7fbddb62aa9b361bac0b2415a533659da080")
+
         # configure logging
         wandb_run = wandb.init(
             dir=str(self.output_dir),
@@ -122,7 +125,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
             }
         )
 
-        wandb.login(key = "64db7fbddb62aa9b361bac0b2415a533659da080")
+        
 
         # configure checkpoint
         topk_manager = TopKCheckpointManager(
