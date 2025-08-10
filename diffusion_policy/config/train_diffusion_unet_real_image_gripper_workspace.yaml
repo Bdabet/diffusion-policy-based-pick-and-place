@@ -126,7 +126,7 @@ logging:
   mode: online
   name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
   tags: ["${name}", "${task_name}", "${exp_name}"]
-  id: "kbvzg89b"
+  id: null
   group: null
 
 checkpoint:
