@@ -179,7 +179,6 @@ def main(input, output, robot_ip, match_dataset, match_episode,
             env.realsense.set_exposure(exposure=120, gain=0)
             # realsense white balance
             env.realsense.set_white_balance(white_balance=5900)
-
             
             time.sleep(1.0)
 
@@ -222,9 +221,6 @@ def main(input, output, robot_ip, match_dataset, match_episode,
 
                     # pump obs
                     # obs = env.get_obs()
-
-                 
-
 
                     press_events = key_counter.get_press_events()
                     # print(f"Press events: {press_events}")
@@ -366,14 +362,14 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             this_target_pose = perv_target_pose.copy()
                             this_target_pose[[0,1]] += action[-1]
                             perv_target_pose = this_target_pose
-                            this_target_poses = np.expand_dims(this_target_pose, axis=0)
+                            this_actions = np.expand_dims(this_target_pose, axis=0)
                         else:
-                            this_target_poses = np.zeros((len(action), len(action_array)), dtype=np.float64)
-                            print("zeros target pose", this_target_poses)
-                            this_target_poses[:] = action_array
-                            print("initial target pose", this_target_poses)
-                            this_target_poses[:,:] = action
-                            print("initially predicted target poses", this_target_poses)
+                            this_actions = np.zeros((len(action), len(action_array)), dtype=np.float64)
+                            print("zeros target pose", this_actions)
+                            this_actions[:] = action_array
+                            print("initial target pose", this_actions)
+                            this_actions[:,:] = action
+                            print("initially predicted target poses", this_actions)
                             print("action 2", action)
 
                         # deal with timing
@@ -386,14 +382,14 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         print("after is new")
                         if np.sum(is_new) == 0:
                             # exceeded time budget, still do something
-                            this_target_poses = this_target_poses[[-1]]
+                            this_actions = this_actions[[-1]]
                             # schedule on next available step
                             next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
                             action_timestamp = eval_t_start + (next_step_idx) * dt
                             print('Over budget', action_timestamp - curr_time)
                             action_timestamps = np.array([action_timestamp])
                         else:
-                            this_target_poses = this_target_poses[is_new]
+                            this_actions = this_actions[is_new]
                             action_timestamps = action_timestamps[is_new]
                             
 
@@ -408,23 +404,16 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         #     print("Unclipped:", unclipped_target_poses)
                         #     print("Clipped:", this_target_poses)
 
-                        # print("this target poses after new", this_target_poses)
-                        # action_to_send = np.zeros_like(this_target_poses)
-                        # # rehsape action to send to add gripper column
-                        # np.zeros_like(-1, np.shape(this_target_poses)[1])
-                        # print("action to send 1")
-                        # action_to_send[:,:6] = this_target_poses[:,:6]
-                        # print("action to send 2")
-                        # action_to_send[:,6] = np.round(action[:,6])
+
 
                         # print("sent action", action_to_send)
 
                         # execute actions
                         env.exec_actions(
-                            actions=this_target_poses,
+                            actions=this_actions,
                             timestamps=action_timestamps
                         )
-                        print(f"Submitted {len(this_target_poses)} steps of actions.")
+                        print(f"Submitted {len(this_actions)} steps of actions.")
 
                         
 
