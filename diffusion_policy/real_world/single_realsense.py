@@ -21,6 +21,7 @@ class Command(enum.Enum):
     START_RECORDING = 2
     STOP_RECORDING = 3
     RESTART_PUT = 4
+    TAKE_SNAPSHOT = 5
 
 class SingleRealsense(mp.Process):
     MAX_PATH_LENGTH = 4096 # linux path has a limit of 4096 bytes
@@ -96,7 +97,8 @@ class SingleRealsense(mp.Process):
             'option_value': 0.0,
             'video_path': np.array('a'*self.MAX_PATH_LENGTH),
             'recording_start_time': 0.0,
-            'put_start_time': 0.0
+            'put_start_time': 0.0,
+            'snapshot_path': np.array('a'*self.MAX_PATH_LENGTH)  
         }
 
         command_queue = SharedMemoryQueue.create_from_examples(
@@ -197,6 +199,15 @@ class SingleRealsense(mp.Process):
     
     def end_wait(self):
         self.join()
+
+    def take_snapshot(self, image_path: str):
+        path_len = len(image_path.encode('utf-8'))
+        if path_len > self.MAX_PATH_LENGTH:
+            raise RuntimeError('snapshot path too long.')
+        self.command_queue.put({
+            'cmd': Command.TAKE_SNAPSHOT.value,
+            'snapshot_path': image_path
+        })
 
     @property
     def is_ready(self):
@@ -471,6 +482,11 @@ class SingleRealsense(mp.Process):
                         # stop need to flush all in-flight frames to disk, which might take longer than dt.
                         # soft-reset put to drop frames to prevent ring buffer overflow.
                         put_idx = None
+                    elif cmd == Command.TAKE_SNAPSHOT.value:
+                        snapshot_path = str(command['snapshot_path']).strip('\x00')
+                        if 'color' in rec_data:
+                            print(snapshot_path)
+                            cv2.imwrite(snapshot_path, rec_data['color'])
                     elif cmd == Command.RESTART_PUT.value:
                         put_idx = None
                         put_start_time = command['put_start_time']

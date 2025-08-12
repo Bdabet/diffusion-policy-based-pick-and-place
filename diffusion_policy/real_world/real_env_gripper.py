@@ -73,6 +73,8 @@ class RealEnv:
         assert output_dir.parent.is_dir()
         video_dir = output_dir.joinpath('videos')
         video_dir.mkdir(parents=True, exist_ok=True)
+        image_dir = output_dir.joinpath('current_frame')
+        image_dir.mkdir(parents=True, exist_ok=True)
         zarr_path = str(output_dir.joinpath('replay_buffer.zarr').absolute())
         replay_buffer = ReplayBuffer.create_from_path(zarr_path=zarr_path, mode='a')
 
@@ -196,6 +198,7 @@ class RealEnv:
         # recording
         self.output_dir = output_dir
         self.video_dir = video_dir
+        self.image_dir = image_dir
         self.replay_buffer = replay_buffer
         # temp memory buffers
         self.last_realsense_data = None
@@ -240,7 +243,6 @@ class RealEnv:
         # print("start_wait line 3")
         if self.multi_cam_vis is not None:
             self.multi_cam_vis.start_wait()
-    
     def stop_wait(self):
         self.robot.stop_wait()
         self.realsense.stop_wait()
@@ -254,6 +256,7 @@ class RealEnv:
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
+        print("exit was trigerred")
         self.stop()
 
     # ========= async env API ===========
@@ -469,4 +472,20 @@ class RealEnv:
         if this_video_dir.exists():
             shutil.rmtree(str(this_video_dir))
         print(f'Episode {episode_id} dropped!')
+
+    def save_current_frame(self):
+        
+        assert self.is_ready
+        print("ready asserted")
+
+        # create single images
+        n_cameras = self.realsense.n_cameras
+        image_paths = list()
+        for i in range(n_cameras):
+            image_paths.append(
+                str(self.image_dir.joinpath(f'{i}.png').absolute()))
+        
+        self.realsense.multi_save_snap(image_path = image_paths)
+
+        
 
