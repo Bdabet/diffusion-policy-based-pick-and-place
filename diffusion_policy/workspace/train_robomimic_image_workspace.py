@@ -85,6 +85,8 @@ class TrainRobomimicImageWorkspace(BaseWorkspace):
             config=OmegaConf.to_container(cfg, resolve=True),
             **cfg.logging
         )
+        
+        
         wandb.config.update(
             {
                 "output_dir": self.output_dir,

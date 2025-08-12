@@ -151,7 +151,7 @@ def real_data_to_replay_buffer(
                     elif out_resolutions is not None:
                         out_img_res = tuple(out_resolutions)
 
-                    # allocate array
+                    # allocate camera arrays
                     if arr_name not in out_replay_buffer:
                         ow, oh = out_img_res
                         _ = out_replay_buffer.data.require_dataset(
