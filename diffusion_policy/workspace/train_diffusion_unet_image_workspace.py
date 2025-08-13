@@ -116,7 +116,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
         # configure logging
         wandb_run = wandb.init(
             dir=str(self.output_dir),
-            settings=wandb.Settings(_disable_stats=True) 
+            settings=wandb.Settings(x_disable_stats=True),
             config=OmegaConf.to_container(cfg, resolve=True),
             **cfg.logging
         )
