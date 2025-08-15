@@ -4,6 +4,7 @@ import numpy as np
 import time
 import shutil
 import math
+import cv2
 from multiprocessing.managers import SharedMemoryManager
 from diffusion_policy.real_world.rtde_interpolation_controller import RTDEInterpolationController
 from diffusion_policy.real_world.multi_realsense import MultiRealsense, SingleRealsense
@@ -260,7 +261,7 @@ class RealEnv:
         self.stop()
 
     # ========= async env API ===========
-    def get_obs(self) -> dict:
+    def get_obs(self, conditioned = False) -> dict:
         "observation dict"
         assert self.is_ready
 
@@ -292,6 +293,13 @@ class RealEnv:
                 this_idxs.append(this_idx)
             # remap key
             camera_obs[f'camera_{camera_idx}'] = value['color'][this_idxs]
+
+            if conditioned:
+                # Load the last frame and repeat it to match the number of timestamps
+                last_frame = cv2.imread("path_to_last_frame_image.png")
+                num_frames = len(this_idxs) # determine number of frames obtained for each camera
+                camera_obs[f"camera_{camera_idx}_last_frame"] = np.repeat(last_frame[np.newaxis, :, :, :], 
+                num_frames, axis=0)  # Repeat the last frame to match the batch size
 
         # align robot obs
         robot_timestamps = last_robot_data['robot_receive_timestamp']
