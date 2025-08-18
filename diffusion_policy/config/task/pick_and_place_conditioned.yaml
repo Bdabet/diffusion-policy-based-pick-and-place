@@ -15,12 +15,6 @@ shape_meta: &shape_meta
     camera_2:
       shape: ${task.image_shape}
       type: rgb
-    # camera_3:
-    #   shape: ${task.image_shape}
-    #   type: rgb
-    # camera_4:
-    #   shape: ${task.image_shape}
-    #   type: rgb
     camera_0_last_frame:
       shape: ${task.image_shape}
       type: rgb
@@ -44,7 +38,7 @@ env_runner:
   _target_: diffusion_policy.env_runner.real_pusht_image_runner.RealPushTImageRunner
 
 dataset:
-  _target_: diffusion_policy.dataset.pick_and_place_dataset.RealPushTImageDataset
+  _target_: diffusion_policy.dataset.pick_and_place_dataset_conditioned.PicKPlaceDatasetConditioned
   shape_meta: *shape_meta
   dataset_path: ${task.dataset_path}
   horizon: ${horizon}
