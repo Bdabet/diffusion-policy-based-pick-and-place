@@ -12,12 +12,15 @@ from diffusion_policy.real_world.video_recorder import VideoRecorder
 from diffusion_policy.common.timestamp_accumulator import (
     TimestampObsAccumulator, 
     TimestampActionAccumulator,
-    align_timestamps
+    align_timestamps,
 )
 from diffusion_policy.real_world.multi_camera_visualizer import MultiCameraVisualizer
 from diffusion_policy.common.replay_buffer import ReplayBuffer
 from diffusion_policy.common.cv2_util import (
     get_image_transform, optimal_row_cols)
+from diffusion_policy.common.check_text_format import check_text_format
+from sentence_transformers import SentenceTransformer
+
 
 DEFAULT_OBS_KEY_MAP = {
     # robot
@@ -35,6 +38,7 @@ DEFAULT_OBS_KEY_MAP = {
     'step_idx': 'step_idx',
     'timestamp': 'timestamp'
 }
+
 
 class RealEnv:
     def __init__(self, 
@@ -76,6 +80,8 @@ class RealEnv:
         video_dir.mkdir(parents=True, exist_ok=True)
         image_dir = output_dir.joinpath('current_frame')
         image_dir.mkdir(parents=True, exist_ok=True)
+        text_dir = output_dir.joinpath('current_text_goal')
+        text_dir.mkdir(parents=True, exist_ok=True)
         zarr_path = str(output_dir.joinpath('replay_buffer.zarr').absolute())
         replay_buffer = ReplayBuffer.create_from_path(zarr_path=zarr_path, mode='a')
 
@@ -196,10 +202,12 @@ class RealEnv:
         self.max_pos_speed = max_pos_speed
         self.max_rot_speed = max_rot_speed
         self.obs_key_map = obs_key_map
+        self.text_encoder = SentenceTransformer("all-MiniLM-L6-v2")
         # recording
         self.output_dir = output_dir
         self.video_dir = video_dir
         self.image_dir = image_dir
+        self.text_dir = text_dir
         self.replay_buffer = replay_buffer
         # temp memory buffers
         self.last_realsense_data = None
@@ -274,7 +282,6 @@ class RealEnv:
 
         # 125 hz, robot_receive_timestamp
         last_robot_data = self.robot.get_all_state()
-        # both have more than n_obs_steps data
 
         # align camera obs timestamps
         dt = 1 / self.frequency
@@ -294,9 +301,11 @@ class RealEnv:
             # remap key
             camera_obs[f'camera_{camera_idx}'] = value['color'][this_idxs]
 
-            if conditioned:
+            if conditioned and camera_idx < 2 : #skip third camera since it is not used for last frame conditioning
                 # Load the last frame and repeat it to match the number of timestamps
-                last_frame = cv2.imread("path_to_last_frame_image.png")
+                # current_image_dir = self.output_dir.joinpath('current_frame', f'{camera_idx}.png')
+                current_image_dir = self.output_dir.mkdir(parents=True, exist_ok=True)
+                last_frame = cv2.imread(current_image_dir)
                 num_frames = len(this_idxs) # determine number of frames obtained for each camera
                 camera_obs[f"camera_{camera_idx}_last_frame"] = np.repeat(last_frame[np.newaxis, :, :, :], 
                 num_frames, axis=0)  # Repeat the last frame to match the batch size
@@ -312,21 +321,41 @@ class RealEnv:
                 this_idx = is_before_idxs[-1]
             this_idxs.append(this_idx)
 
-        robot_obs_raw = dict()
+        current_obs_raw = dict()
         # print(last_robot_data)
         for k, v in last_robot_data.items():
             if k in self.obs_key_map:
                 # print(f"current obs {k}, current value{v}")
-                robot_obs_raw[self.obs_key_map[k]] = v
+                current_obs_raw[self.obs_key_map[k]] = v
+        
+        # extract current text goal
+        text_file_path = self.text_dir.joinpath("current_text_goal.txt")
+        text_file_path.touch(exist_ok=True) # ensure text file exists
+        current_text_goal_file = open(text_file_path)
+        current_text_goal = current_text_goal_file.read()
+        if not check_text_format(current_text_goal):
+            print("warning !!!!!, goal text does not adhere to format")
+        encoded_text = self.text_encoder.encode(current_text_goal)
+        print("print current text", current_text_goal)
+        
+        # add text goal to obs_raw
+        length = len(next(iter(current_obs_raw.values())))
+        current_obs_raw["current_text_goal"] = np.array([current_text_goal] * length)
+        encoder_current_text_goal = self.text_encoder.encode(current_text_goal)
+        current_obs_raw["encoded_current_text_goal"] = np.array([encoder_current_text_goal] * length)
+
+
         
         robot_obs = dict()
-        for k, v in robot_obs_raw.items():
+        for k, v in current_obs_raw.items():
             robot_obs[k] = v[this_idxs]
+
+        # print("current obs raw", current_obs_raw)
 
         # accumulate obs
         if self.obs_accumulator is not None:
             self.obs_accumulator.put(
-                robot_obs_raw,
+                current_obs_raw,
                 robot_timestamps
             )
 
