@@ -269,7 +269,7 @@ class RealEnv:
         self.stop()
 
     # ========= async env API ===========
-    def get_obs(self, conditioned = False) -> dict:
+    def get_obs(self, image_conditioned = False, text_conditioned = False) -> dict:
         "observation dict"
         assert self.is_ready
 
@@ -300,17 +300,19 @@ class RealEnv:
                 this_idxs.append(this_idx)
             # remap key
             camera_obs[f'camera_{camera_idx}'] = value['color'][this_idxs]
+            # print("camera frames shape", np.shape(camera_obs["camera_0"]))
 
-            if conditioned and camera_idx < 2 : #skip third camera since it is not used for last frame conditioning
+            if image_conditioned and camera_idx < 2 : #skip third camera since it is not used for last frame conditioning
                 # Load the last frame and repeat it to match the number of timestamps
-                # current_image_dir = self.output_dir.joinpath('current_frame', f'{camera_idx}.png')
-                current_image_dir = self.output_dir.mkdir(parents=True, exist_ok=True)
-                last_frame = cv2.imread(current_image_dir)
+                current_image_dir = self.output_dir.joinpath('current_frame', f'{camera_idx}.png')
+                last_frame = cv2.imread(str(current_image_dir))
                 num_frames = len(this_idxs) # determine number of frames obtained for each camera
                 camera_obs[f"camera_{camera_idx}_last_frame"] = np.repeat(last_frame[np.newaxis, :, :, :], 
                 num_frames, axis=0)  # Repeat the last frame to match the batch size
+                # print("camera last frame shape", np.shape(camera_obs["camera_0_last_frame"]))
 
         # align robot obs
+        print("aligning robot obs")
         robot_timestamps = last_robot_data['robot_receive_timestamp']
         this_timestamps = robot_timestamps
         this_idxs = list()
@@ -328,21 +330,21 @@ class RealEnv:
                 # print(f"current obs {k}, current value{v}")
                 current_obs_raw[self.obs_key_map[k]] = v
         
-        # extract current text goal
-        text_file_path = self.text_dir.joinpath("current_text_goal.txt")
-        text_file_path.touch(exist_ok=True) # ensure text file exists
-        current_text_goal_file = open(text_file_path)
-        current_text_goal = current_text_goal_file.read()
-        if not check_text_format(current_text_goal):
-            print("warning !!!!!, goal text does not adhere to format")
-        encoded_text = self.text_encoder.encode(current_text_goal)
-        print("print current text", current_text_goal)
-        
-        # add text goal to obs_raw
-        length = len(next(iter(current_obs_raw.values())))
-        current_obs_raw["current_text_goal"] = np.array([current_text_goal] * length)
-        encoder_current_text_goal = self.text_encoder.encode(current_text_goal)
-        current_obs_raw["encoded_current_text_goal"] = np.array([encoder_current_text_goal] * length)
+        if text_conditioned:
+            # extract current text goal
+            text_file_path = self.text_dir.joinpath("current_text_goal.txt")
+            text_file_path.touch(exist_ok=True) # ensure text file exists
+            current_text_goal_file = open(text_file_path)
+            current_text_goal = current_text_goal_file.read()
+            assert check_text_format(current_text_goal)
+            encoded_text = self.text_encoder.encode(current_text_goal)
+            print("print current text", current_text_goal)
+            
+            # add text goal to obs_raw
+            length = len(next(iter(current_obs_raw.values())))
+            current_obs_raw["current_text_goal"] = np.array([current_text_goal] * length)
+            encoder_current_text_goal = self.text_encoder.encode(current_text_goal)
+            current_obs_raw["encoded_current_text_goal"] = np.array([encoder_current_text_goal] * length)
 
 
         

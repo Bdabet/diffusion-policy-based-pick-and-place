@@ -484,9 +484,9 @@ class SingleRealsense(mp.Process):
                         put_idx = None
                     elif cmd == Command.TAKE_SNAPSHOT.value:
                         snapshot_path = str(command['snapshot_path']).strip('\x00')
-                        if 'color' in rec_data:
+                        if 'color' in data:
                             print(snapshot_path)
-                            cv2.imwrite(snapshot_path, rec_data['color'])
+                            cv2.imwrite(snapshot_path, data['color'])
                     elif cmd == Command.RESTART_PUT.value:
                         put_idx = None
                         put_start_time = command['put_start_time']

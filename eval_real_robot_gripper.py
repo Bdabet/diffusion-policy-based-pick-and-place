@@ -65,10 +65,12 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 @click.option('--max_duration', '-md', default=180, help='Max duration for each epoch in seconds.')
 @click.option('--frequency', '-f', default=10, type=float, help="Control frequency in Hz.")
 @click.option('--command_latency', '-cl', default=0.01, type=float, help="Latency between receiving SapceMouse command to executing on Robot in Sec.")
+@click.option('--image_conditioning', '-icond', default = False, type= bool, help="policy conditioning using image (True/False)")
+@click.option('--text_conditioning', '-tcond', default = False, type= bool, help="policy conditioning using text (True/False)")
 def main(input, output, robot_ip, match_dataset, match_episode,
     vis_camera_idx, init_joints, 
     steps_per_inference, max_duration,
-    frequency, command_latency):
+    frequency, command_latency, image_conditioning, text_conditioning):
 
 
 
@@ -182,18 +184,18 @@ def main(input, output, robot_ip, match_dataset, match_episode,
             
             time.sleep(1.0)
 
-            print("Warming up policy inference")
-            obs = env.get_obs()
-            with torch.no_grad():
-                policy.reset()
-                obs_dict_np = get_real_obs_dict(
-                    env_obs=obs, shape_meta=cfg.task.shape_meta)
-                obs_dict = dict_apply(obs_dict_np, 
-                    lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
-                result = policy.predict_action(obs_dict)
-                action = result['action'][0].detach().to('cpu').numpy()
-                assert action.shape[-1] == 7
-                del result
+            # print("Warming up policy inference")
+            # obs = env.get_obs(conditioned=conditioned)
+            # with torch.no_grad():
+            #     policy.reset()
+            #     obs_dict_np = get_real_obs_dict(
+            #         env_obs=obs, shape_meta=cfg.task.shape_meta)
+            #     obs_dict = dict_apply(obs_dict_np, 
+            #         lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
+            #     result = policy.predict_action(obs_dict)
+            #     action = result['action'][0].detach().to('cpu').numpy()
+            #     assert action.shape[-1] == 7
+            #     del result
 
             print('Ready!')
             
@@ -231,6 +233,10 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             # Exit program
                             env.end_episode()
                             exit(0)
+                        elif key_stroke  == KeyCode(char='p'):
+                            print("saving cvurrent fram")
+                            env.save_current_frame()
+                            print("saved current frame")
                         elif key_stroke == KeyCode(char='c'):
                             # Exit human control loop
                             # hand control over to the policy
@@ -334,7 +340,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
 
                         # get obs
                         print('get_obs')
-                        obs = env.get_obs()
+                        obs = env.get_obs( image_conditioned = image_conditioning, text_conditioned = text_conditioning)
 
                         # print ("observation", obs)
                         obs_timestamps = obs['timestamp']
@@ -426,7 +432,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             if key_stroke == KeyCode(char='s'):
                                 # Stop episode
                                 # Hand control back to human
-                                print("pess events in stop loop:", press_events)
+                                print("press events in stop loop:", press_events)
                                 print('Stopping episode...')
                                 env.end_episode()
                                 terminate = True
