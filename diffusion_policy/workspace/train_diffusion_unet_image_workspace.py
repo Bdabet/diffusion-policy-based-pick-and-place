@@ -111,7 +111,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
         assert isinstance(env_runner, BaseImageRunner)
 
         # replace system stats collection with a no-op
-        wandb.sdk.internal.system.SystemStats = lambda *a, **k: None
+        wandb.sdk.internal.stats.SystemStats = lambda *a, **k: None
 
         # set wandb API key for login
         wandb.login(key = "64db7fbddb62aa9b361bac0b2415a533659da080")
