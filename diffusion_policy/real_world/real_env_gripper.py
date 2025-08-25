@@ -5,6 +5,7 @@ import time
 import shutil
 import math
 import cv2
+import scipy.spatial.transform as st
 from multiprocessing.managers import SharedMemoryManager
 from diffusion_policy.real_world.rtde_interpolation_controller import RTDEInterpolationController
 from diffusion_policy.real_world.multi_realsense import MultiRealsense, SingleRealsense
@@ -226,6 +227,13 @@ class RealEnv:
         # print(f"robot ready : {self.robot.is_ready}")
         return self.realsense.is_ready and self.robot.is_ready
     
+    def is_goal_text_valid(self):
+        text_file_path = self.text_dir.joinpath("current_text_goal.txt")
+        text_file_path.touch(exist_ok=True) # ensure text file exists
+        with open(text_file_path) as current_text_goal_file:
+            current_text_goal = current_text_goal_file.read()
+        return check_text_format(current_text_goal)
+    
     def start(self, wait=True):
         self.realsense.start(wait=False)
         # print("reached robot.start")
@@ -329,22 +337,24 @@ class RealEnv:
             if k in self.obs_key_map:
                 # print(f"current obs {k}, current value{v}")
                 current_obs_raw[self.obs_key_map[k]] = v
+                if k == 'ActualTCPPose':
+                    # add quaternion eef pose to observation dictionary
+                    current_obs_raw['robot_eef_quat'] = st.Rotation.from_rotvec(v).as_quat()
         
         if text_conditioned:
             # extract current text goal
             text_file_path = self.text_dir.joinpath("current_text_goal.txt")
             text_file_path.touch(exist_ok=True) # ensure text file exists
-            current_text_goal_file = open(text_file_path)
-            current_text_goal = current_text_goal_file.read()
-            assert check_text_format(current_text_goal)
-            encoded_text = self.text_encoder.encode(current_text_goal)
+            with open(text_file_path) as current_text_goal_file:
+                current_text_goal = current_text_goal_file.read()
+            # encoded_text = self.text_encoder.encode(current_text_goal)
             print("print current text", current_text_goal)
             
             # add text goal to obs_raw
             length = len(next(iter(current_obs_raw.values())))
             current_obs_raw["current_text_goal"] = np.array([current_text_goal] * length)
-            encoder_current_text_goal = self.text_encoder.encode(current_text_goal)
-            current_obs_raw["encoded_current_text_goal"] = np.array([encoder_current_text_goal] * length)
+            encoded_current_text_goal = self.text_encoder.encode(current_text_goal)
+            current_obs_raw["encoded_current_text_goal"] = np.array([encoded_current_text_goal] * length)
 
 
         
