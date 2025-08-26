@@ -143,6 +143,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
 
         # save batch for sampling
         train_sampling_batch = None
+        prev_ckpt_path = None
 
         if cfg.training.debug:
             cfg.training.num_epochs = 2
@@ -265,6 +266,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                 
                 # checkpoint
 
+                
                 # # Save epoch-specific checkpoint
                 # current_epoch_tag = f"epoch_{self.epoch:04d}"
                 # prev_epoch_tag = f"epoch_{self.epoch - 1:04d}"
@@ -279,7 +281,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
 
                 # always delete previous checkpoint when it exists (ie. when checkpoint is not a multiple of checkpoint_every)
                 if prev_ckpt_path is not None and pathlib.Path(prev_ckpt_path).exists():
-                        prev_ckpt_path.unlink()
+                        pathlib.Path(prev_ckpt_path).unlink()
 
                 # checkpointing
                 if cfg.checkpoint.save_last_ckpt:
@@ -304,6 +306,8 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                     # only save current checkpoint path when not a multiple of checkpoint_every
                     if (self.epoch % cfg.training.checkpoint_every) != 0:
                         prev_ckpt_path = topk_ckpt_path
+                    else:
+                        prev_ckpt_path = None
                     
 
                     
