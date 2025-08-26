@@ -209,6 +209,7 @@ class RealEnv:
         self.video_dir = video_dir
         self.image_dir = image_dir
         self.text_dir = text_dir
+        self.current_text_goal = None
         self.replay_buffer = replay_buffer
         # temp memory buffers
         self.last_realsense_data = None
@@ -320,7 +321,7 @@ class RealEnv:
                 # print("camera last frame shape", np.shape(camera_obs["camera_0_last_frame"]))
 
         # align robot obs
-        print("aligning robot obs")
+        # print("aligning robot obs")
         robot_timestamps = last_robot_data['robot_receive_timestamp']
         this_timestamps = robot_timestamps
         this_idxs = list()
@@ -338,22 +339,30 @@ class RealEnv:
                 # print(f"current obs {k}, current value{v}")
                 current_obs_raw[self.obs_key_map[k]] = v
                 if k == 'ActualTCPPose':
+                    q_poses = np.zeros((np.shape(v)[0], 7))
                     # add quaternion eef pose to observation dictionary
-                    current_obs_raw['robot_eef_quat'] = st.Rotation.from_rotvec(v).as_quat()
-        
+                    for idx,pose in enumerate(v):
+                        quaternion_angles = st.Rotation.from_rotvec(pose[3:]).as_quat()
+                        q_poses[idx][:3] = pose[0:3]
+                        q_poses[idx][3:] = quaternion_angles[:]
+                    current_obs_raw['robot_eef_quat'] = q_poses
+                    
+
+                    # current_obs_raw['robot_eef_quat'] = st.Rotation.from_rotvec(v).as_quat()
+        # print("current obs raw",current_obs_raw)
         if text_conditioned:
             # extract current text goal
             text_file_path = self.text_dir.joinpath("current_text_goal.txt")
             text_file_path.touch(exist_ok=True) # ensure text file exists
             with open(text_file_path) as current_text_goal_file:
-                current_text_goal = current_text_goal_file.read()
+                self.current_text_goal = current_text_goal_file.read()
             # encoded_text = self.text_encoder.encode(current_text_goal)
-            print("print current text", current_text_goal)
-            
+            # print("print current text", current_text_goal)
+            self.current_text_goal = self.current_text_goal
             # add text goal to obs_raw
             length = len(next(iter(current_obs_raw.values())))
-            current_obs_raw["current_text_goal"] = np.array([current_text_goal] * length)
-            encoded_current_text_goal = self.text_encoder.encode(current_text_goal)
+            current_obs_raw["current_text_goal"] = np.array([self.current_text_goal] * length)
+            encoded_current_text_goal = self.text_encoder.encode(self.current_text_goal)
             current_obs_raw["encoded_current_text_goal"] = np.array([encoded_current_text_goal] * length)
 
 
@@ -475,6 +484,7 @@ class RealEnv:
             dt=1/self.frequency
         )
         print(f'Episode {episode_id} started!')
+        print("current goal", self.current_text_goal)
     
     def end_episode(self):
         "Stop recording"
