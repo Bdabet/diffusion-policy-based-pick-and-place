@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - task: pick_and_place
+  - task: pick_and_place_text_conditioned
 
 name: train_diffusion_unet_image
 _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
@@ -102,7 +102,7 @@ training:
   # optimization
   lr_scheduler: cosine
   lr_warmup_steps: 500
-  num_epochs: 600
+  num_epochs: 1000
   gradient_accumulate_every: 1
   # EMA destroys performance when used with BatchNorm
   # replace BatchNorm with GroupNorm.

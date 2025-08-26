@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - task: pick_and_place
+  - task: pick_and_place_conditioned
 
 name: train_diffusion_unet_image
 _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
@@ -74,14 +74,14 @@ ema:
   max_value: 0.9999
 
 dataloader:
-  batch_size: 32
+  batch_size: 16
   num_workers: 4
   shuffle: True
   pin_memory: True
   persistent_workers: True
 
 val_dataloader:
-  batch_size: 32
+  batch_size: 16
   num_workers: 4
   shuffle: False
   pin_memory: True
@@ -102,7 +102,7 @@ training:
   # optimization
   lr_scheduler: cosine
   lr_warmup_steps: 500
-  num_epochs: 600
+  num_epochs: 1000
   gradient_accumulate_every: 1
   # EMA destroys performance when used with BatchNorm
   # replace BatchNorm with GroupNorm.
@@ -126,7 +126,7 @@ logging:
   mode: online
   name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
   tags: ["${name}", "${task_name}", "${exp_name}"]
-  id: null
+  id: 5njsk3g4
   group: null
 
 checkpoint:
