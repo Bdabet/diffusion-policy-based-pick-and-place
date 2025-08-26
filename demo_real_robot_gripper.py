@@ -1,6 +1,6 @@
 """
 Usa
-(robodiff)$ python demo_real_robot_gripper.py -o <demo_save_dir> --robot_ip <ip_of_ur5>
+(robodiff)$ python3 demo_real_robot_gripper.py -o <demo_save_dir> --robot_ip <ip_of_ur5>
 
 Robot movement:
 Move your SpaceMouse to move the robot EEF (locked in xy plane).
@@ -102,7 +102,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 t_command_target = t_cycle_end + dt
 
                 # pump obs
-                env.get_obs()
+                env.get_obs(text_conditioned = text_conditioning)
 
                 # print("waiting for press events")
 
@@ -110,10 +110,10 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 press_events = key_counter.get_press_events()
                 # print(f"press_events: {press_events}")
                 for key_stroke in press_events:
-                    if key_stroke == KeyCode(char='l'):
+                    if key_stroke == KeyCode(char='/'):
                         # Exit program
                         stop = True
-                    elif key_stroke == KeyCode(char='j'):
+                    elif key_stroke == Key.f2:
                         # Start recording
                         if text_conditioning and not env.is_goal_text_valid():
                             print("Current text goal is not valid! Please check the format.")
@@ -122,14 +122,13 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                         key_counter.clear()
                         is_recording = True
                         print('Recording!')
-
-                    elif key_stroke == KeyCode(char='k'):
+                    elif key_stroke == Key.f3:
                         # Stop recording
                         env.end_episode()
                         key_counter.clear()
                         is_recording = False
                         print('Stopped.')
-                    elif key_stroke == Key.backspace:
+                    elif key_stroke == KeyCode(char='-'):
                         # Delete the most recent recorded episode
                         if click.confirm('Are you sure to drop an episode?'):
                             env.drop_episode()
@@ -185,8 +184,8 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
 
 
                 dpos = sm_state[:3] * (env.max_pos_speed / frequency)
-                if np.any(dpos != 0):
-                    print(f"dpos: {dpos}")
+                # if np.any(dpos != 0):
+                #     print(f"dpos: {dpos}")
 
                 
                 
