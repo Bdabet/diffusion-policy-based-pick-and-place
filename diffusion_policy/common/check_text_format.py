@@ -1,9 +1,9 @@
 import re
 
-ALLOWED_OBJECT_COLORS = {"red", "blue", "green", "yellow"}
-ALLOWED_OBJECTS = {"block", "sphere", "cylinder"}
-ALLOWED_POSITIONS = {0, 1, 2, 3, 4, 5}
-ALLOWED_HEIGHTS = {0, 1, 2, 3, 4, 5}
+ALLOWED_OBJECT_COLORS = {"--", "green"}
+ALLOWED_OBJECTS = {"--", "block"}
+ALLOWED_POSITIONS = {0, 1, 2, 3}
+ALLOWED_HEIGHTS = {0, 1, 2, 3}
 
 def check_text_format(text: str) -> bool:
     """
@@ -12,7 +12,7 @@ def check_text_format(text: str) -> bool:
     optionally followed by "at height {number}",
     and the color is in ALLOWED_OBJECT_COLORS. Otherwise False.
     """
-    pattern = r'^put the (\w+) (\w+) at position (\d+)(?: at height (\d+(\.\d+)?))?$'
+    pattern = r'^put the (\S+) (\S+) at position (\d+)(?: at height (\d+(\.\d+)?))?$'
     match = re.match(pattern, text)
     
     if not match:
@@ -37,6 +37,7 @@ if __name__ == "__main__":
         "put the purple block at position 1",
         "put the red block at position 6",
         "put the blue block at position 1 at height 5",
+        "put the -- -- at position 1 at height 1"
     ]
 
     for case in test_cases:
