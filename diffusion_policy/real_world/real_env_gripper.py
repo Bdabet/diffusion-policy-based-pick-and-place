@@ -5,6 +5,7 @@ import time
 import shutil
 import math
 import cv2
+import json
 import scipy.spatial.transform as st
 from multiprocessing.managers import SharedMemoryManager
 from diffusion_policy.real_world.rtde_interpolation_controller import RTDEInterpolationController
@@ -72,17 +73,27 @@ class RealEnv:
             enable_multi_cam_vis=True,
             multi_cam_vis_resolution=(1280,720),
             # shared memory
-            shm_manager=None
+            shm_manager=None,
+            n_positions=3,
             ):
         assert frequency <= video_capture_fps
         output_dir = pathlib.Path(output_dir)
         assert output_dir.parent.is_dir()
         video_dir = output_dir.joinpath('videos')
         video_dir.mkdir(parents=True, exist_ok=True)
-        image_dir = output_dir.joinpath('current_frame')
+        image_dir = output_dir.joinpath('current_frame')   
         image_dir.mkdir(parents=True, exist_ok=True)
+        
+        # create text goal dir
         text_dir = output_dir.joinpath('current_text_goal')
         text_dir.mkdir(parents=True, exist_ok=True)
+        # create initial template text array
+        current_text_goal = ["put the -- -- at position 0 at height 0"]*n_positions
+        # save initial template text array as json 
+        json_array = json.dumps(current_text_goal, indent=4)
+        with open(text_dir.joinpath("current_text_goal.json"), 'w') as f:
+            f.write(json_array)
+
         zarr_path = str(output_dir.joinpath('replay_buffer.zarr').absolute())
         replay_buffer = ReplayBuffer.create_from_path(zarr_path=zarr_path, mode='a')
 
@@ -170,9 +181,7 @@ class RealEnv:
         j_init = np.array([-144.2,-112.4,-103.4,-54.2,90.4,-144]) / 180 * np.pi
         if not init_joints:
             j_init = None
-        # print(f"j_init: {j_init}")
-        
-        # print("reached RTDE controller init")
+
 
         robot = RTDEInterpolationController(
             shm_manager=shm_manager,
@@ -351,19 +360,30 @@ class RealEnv:
                     # current_obs_raw['robot_eef_quat'] = st.Rotation.from_rotvec(v).as_quat()
         # print("current obs raw",current_obs_raw)
         if text_conditioned:
-            # extract current text goal
-            text_file_path = self.text_dir.joinpath("current_text_goal.txt")
-            text_file_path.touch(exist_ok=True) # ensure text file exists
-            with open(text_file_path) as current_text_goal_file:
-                self.current_text_goal = current_text_goal_file.read()
-            # encoded_text = self.text_encoder.encode(current_text_goal)
-            # print("print current text", current_text_goal)
-            self.current_text_goal = self.current_text_goal
-            # add text goal to obs_raw
-            length = len(next(iter(current_obs_raw.values())))
-            current_obs_raw["current_text_goal"] = np.array([self.current_text_goal] * length)
-            encoded_current_text_goal = self.text_encoder.encode(self.current_text_goal)
-            current_obs_raw["encoded_current_text_goal"] = np.array([encoded_current_text_goal] * length)
+
+             # extract current text goal
+            text_file_path = self.text_dir.joinpath("current_text_goal.json")
+            with open(text_file_path, 'r') as current_text_goal_file:
+                self.current_text_goal_list = json.load(current_text_goal_file)
+
+            print("asserting text format")
+            for current_text_goal in self.current_text_goal_list:
+                assert check_text_format(current_text_goal)
+            
+
+
+
+            # text_file_path.touch(exist_ok=True) # ensure text file exists
+           
+            # # encoded_text = self.text_encoder.encode(current_text_goal)
+            # # print("print current text", current_text_goal)
+            # assert check_text_format(self.current_text_goal)
+            # self.current_text_goal = self.current_text_goal
+            # # add text goal to obs_raw
+            # length = len(next(iter(current_obs_raw.values())))
+            # current_obs_raw["current_text_goal"] = np.array([self.current_text_goal] * length)
+            # encoded_current_text_goal = self.text_encoder.encode(self.current_text_goal)
+            # current_obs_raw["encoded_current_text_goal"] = np.array([encoded_current_text_goal] * length)
 
 
         
