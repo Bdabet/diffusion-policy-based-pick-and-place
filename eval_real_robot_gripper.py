@@ -1,6 +1,6 @@
 """
 Usage:
-(robodiff)$ python eval_real_robot_gripper.py -i <ckpt_path> -o <save_dir> --robot_ip <ip_of_ur5>
+(robodiff)$ python3 eval_real_robot_gripper.py -i <ckpt_path> -o <save_dir> --robot_ip <ip_of_ur5>
 
 ================ Human in control ==============
 Robot movement:
@@ -229,15 +229,15 @@ def main(input, output, robot_ip, match_dataset, match_episode,
 
                     for key_stroke in press_events:
                     
-                        if key_stroke == KeyCode(char='q'):
+                        if key_stroke == key_stroke == Key.esc:
                             # Exit program
                             env.end_episode()
                             exit(0)
-                        elif key_stroke  == KeyCode(char='p'):
+                        elif key_stroke == Key.f5:
                             print("saving cvurrent fram")
                             env.save_current_frame()
                             print("saved current frame")
-                        elif key_stroke == KeyCode(char='c'):
+                        elif key_stroke == Key.f2:
                             # Exit human control loop
                             # hand control over to the policy
                             exit_while_loop = True
@@ -429,7 +429,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         press_events = key_counter.get_press_events()
                         exit_stop_while_loop = False
                         for key_stroke in press_events:
-                            if key_stroke == KeyCode(char='s'):
+                            if key_stroke == key_stroke == Key.f3:
                                 # Stop episode
                                 # Hand control back to human
                                 print("press events in stop loop:", press_events)
