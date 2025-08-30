@@ -124,7 +124,8 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
         wandb.config.update(
             {
                 "output_dir": self.output_dir,
-            }
+            }, 
+             allow_val_change=True,    
         )
 
         
@@ -144,6 +145,7 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
 
         # save batch for sampling
         train_sampling_batch = None
+        prev_ckpt_path = None
 
         if cfg.training.debug:
             cfg.training.num_epochs = 2
@@ -266,39 +268,72 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
                 
                 # checkpoint
 
-                # Save epoch-specific checkpoint
-                current_epoch_tag = f"epoch_{self.epoch:04d}"
-                prev_epoch_tag = f"epoch_{self.epoch - 1:04d}"
+                
+                # # Save epoch-specific checkpoint
+                # current_epoch_tag = f"epoch_{self.epoch:04d}"
+                # prev_epoch_tag = f"epoch_{self.epoch - 1:04d}"
 
-                # Save current epoch checkpoint
-                current_ckpt_path = self.save_checkpoint(tag=current_epoch_tag, use_thread=False)
+                # # Save current epoch checkpoint
+                # current_ckpt_path = self.save_checkpoint(tag=current_epoch_tag, use_thread=False)
 
-                # Delete previous epoch checkpoint if it exists
-                prev_ckpt_path = pathlib.Path(self.output_dir).joinpath('checkpoints', f'{prev_epoch_tag}.ckpt')
-                if prev_ckpt_path.exists():
-                    prev_ckpt_path.unlink()
+                # # Delete previous epoch checkpoint if it exists
+                # prev_ckpt_path = pathlib.Path(self.output_dir).joinpath('checkpoints', f'{prev_epoch_tag}.ckpt')
+                # if prev_ckpt_path.exists():
+                #     prev_ckpt_path.unlink()
+
+                # always delete previous checkpoint when it exists (ie. when checkpoint is not a multiple of checkpoint_every)
+                if prev_ckpt_path is not None and pathlib.Path(prev_ckpt_path).exists():
+                        pathlib.Path(prev_ckpt_path).unlink()
+
+                # checkpointing
+                if cfg.checkpoint.save_last_ckpt:
+                    self.save_checkpoint()
+                if cfg.checkpoint.save_last_snapshot:
+                    self.save_snapshot()
+
+                # sanitize metric names
+                metric_dict = dict()
+                for key, value in step_log.items():
+                    new_key = key.replace('/', '_')
+                    metric_dict[new_key] = value
+                
+                # We can't copy the last checkpoint here
+                # since save_checkpoint uses threads.
+                # therefore at this point the file might have been empty!
+                topk_ckpt_path = topk_manager.get_ckpt_path(metric_dict)
+
+                if topk_ckpt_path is not None:
+                    self.save_checkpoint(path=topk_ckpt_path)
+
+                    # only save current checkpoint path when not a multiple of checkpoint_every
+                    if (self.epoch % cfg.training.checkpoint_every) != 0:
+                        prev_ckpt_path = topk_ckpt_path
+                    else:
+                        prev_ckpt_path = None
+                    
 
                     
-                if (self.epoch % cfg.training.checkpoint_every) == 0:
-                    # checkpointing
-                    if cfg.checkpoint.save_last_ckpt:
-                        self.save_checkpoint()
-                    if cfg.checkpoint.save_last_snapshot:
-                        self.save_snapshot()
-
-                    # sanitize metric names
-                    metric_dict = dict()
-                    for key, value in step_log.items():
-                        new_key = key.replace('/', '_')
-                        metric_dict[new_key] = value
                     
-                    # We can't copy the last checkpoint here
-                    # since save_checkpoint uses threads.
-                    # therefore at this point the file might have been empty!
-                    topk_ckpt_path = topk_manager.get_ckpt_path(metric_dict)
+                # if (self.epoch % cfg.training.checkpoint_every) == 0:
+                #     # checkpointing
+                #     if cfg.checkpoint.save_last_ckpt:
+                #         self.save_checkpoint()
+                #     if cfg.checkpoint.save_last_snapshot:
+                #         self.save_snapshot()
 
-                    if topk_ckpt_path is not None:
-                        self.save_checkpoint(path=topk_ckpt_path)
+                #     # sanitize metric names
+                #     metric_dict = dict()
+                #     for key, value in step_log.items():
+                #         new_key = key.replace('/', '_')
+                #         metric_dict[new_key] = value
+                    
+                #     # We can't copy the last checkpoint here
+                #     # since save_checkpoint uses threads.
+                #     # therefore at this point the file might have been empty!
+                #     topk_ckpt_path = topk_manager.get_ckpt_path(metric_dict)
+
+                #     if topk_ckpt_path is not None:
+                #         self.save_checkpoint(path=topk_ckpt_path)
                 # ========= eval end for this epoch ==========
                 policy.train()
 

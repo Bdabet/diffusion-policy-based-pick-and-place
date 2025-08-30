@@ -18,7 +18,7 @@ def rotate_around_local_z(grasping_pose, rotation_angle):
         r_new = r_current * r_local_z
 
         # debug 
-        print("r_new", r_new.as_euler('xyz', degrees=True))
+        # print("r_new", r_new.as_euler('xyz', degrees=True))
 
         # Update the final grasping pose
         grasping_pose = np.concatenate((grasping_pose[:3], r_new.as_euler('xyz', degrees=False)), axis=None)

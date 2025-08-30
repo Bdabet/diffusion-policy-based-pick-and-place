@@ -4,6 +4,8 @@ import numpy as np
 import time
 import shutil
 import math
+import cv2
+import scipy.spatial.transform as st
 from multiprocessing.managers import SharedMemoryManager
 from diffusion_policy.real_world.rtde_interpolation_controller import RTDEInterpolationController
 from diffusion_policy.real_world.multi_realsense import MultiRealsense, SingleRealsense
@@ -11,12 +13,15 @@ from diffusion_policy.real_world.video_recorder import VideoRecorder
 from diffusion_policy.common.timestamp_accumulator import (
     TimestampObsAccumulator, 
     TimestampActionAccumulator,
-    align_timestamps
+    align_timestamps,
 )
 from diffusion_policy.real_world.multi_camera_visualizer import MultiCameraVisualizer
 from diffusion_policy.common.replay_buffer import ReplayBuffer
 from diffusion_policy.common.cv2_util import (
     get_image_transform, optimal_row_cols)
+from diffusion_policy.common.check_text_format import check_text_format
+from sentence_transformers import SentenceTransformer
+
 
 DEFAULT_OBS_KEY_MAP = {
     # robot
@@ -34,6 +39,7 @@ DEFAULT_OBS_KEY_MAP = {
     'step_idx': 'step_idx',
     'timestamp': 'timestamp'
 }
+
 
 class RealEnv:
     def __init__(self, 
@@ -73,6 +79,10 @@ class RealEnv:
         assert output_dir.parent.is_dir()
         video_dir = output_dir.joinpath('videos')
         video_dir.mkdir(parents=True, exist_ok=True)
+        image_dir = output_dir.joinpath('current_frame')
+        image_dir.mkdir(parents=True, exist_ok=True)
+        text_dir = output_dir.joinpath('current_text_goal')
+        text_dir.mkdir(parents=True, exist_ok=True)
         zarr_path = str(output_dir.joinpath('replay_buffer.zarr').absolute())
         replay_buffer = ReplayBuffer.create_from_path(zarr_path=zarr_path, mode='a')
 
@@ -193,9 +203,13 @@ class RealEnv:
         self.max_pos_speed = max_pos_speed
         self.max_rot_speed = max_rot_speed
         self.obs_key_map = obs_key_map
+        self.text_encoder = SentenceTransformer("all-MiniLM-L6-v2")
         # recording
         self.output_dir = output_dir
         self.video_dir = video_dir
+        self.image_dir = image_dir
+        self.text_dir = text_dir
+        self.current_text_goal = None
         self.replay_buffer = replay_buffer
         # temp memory buffers
         self.last_realsense_data = None
@@ -213,6 +227,13 @@ class RealEnv:
     def is_ready(self):
         # print(f"robot ready : {self.robot.is_ready}")
         return self.realsense.is_ready and self.robot.is_ready
+    
+    def is_goal_text_valid(self):
+        text_file_path = self.text_dir.joinpath("current_text_goal.txt")
+        text_file_path.touch(exist_ok=True) # ensure text file exists
+        with open(text_file_path) as current_text_goal_file:
+            current_text_goal = current_text_goal_file.read()
+        return check_text_format(current_text_goal)
     
     def start(self, wait=True):
         self.realsense.start(wait=False)
@@ -240,7 +261,6 @@ class RealEnv:
         # print("start_wait line 3")
         if self.multi_cam_vis is not None:
             self.multi_cam_vis.start_wait()
-    
     def stop_wait(self):
         self.robot.stop_wait()
         self.realsense.stop_wait()
@@ -254,10 +274,11 @@ class RealEnv:
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
+        print("exit was trigerred")
         self.stop()
 
     # ========= async env API ===========
-    def get_obs(self) -> dict:
+    def get_obs(self, image_conditioned = False, text_conditioned = False) -> dict:
         "observation dict"
         assert self.is_ready
 
@@ -270,7 +291,6 @@ class RealEnv:
 
         # 125 hz, robot_receive_timestamp
         last_robot_data = self.robot.get_all_state()
-        # both have more than n_obs_steps data
 
         # align camera obs timestamps
         dt = 1 / self.frequency
@@ -289,8 +309,19 @@ class RealEnv:
                 this_idxs.append(this_idx)
             # remap key
             camera_obs[f'camera_{camera_idx}'] = value['color'][this_idxs]
+            # print("camera frames shape", np.shape(camera_obs["camera_0"]))
+
+            if image_conditioned and camera_idx < 2 : #skip third camera since it is not used for last frame conditioning
+                # Load the last frame and repeat it to match the number of timestamps
+                current_image_dir = self.output_dir.joinpath('current_frame', f'{camera_idx}.png')
+                last_frame = cv2.imread(str(current_image_dir))
+                num_frames = len(this_idxs) # determine number of frames obtained for each camera
+                camera_obs[f"camera_{camera_idx}_last_frame"] = np.repeat(last_frame[np.newaxis, :, :, :], 
+                num_frames, axis=0)  # Repeat the last frame to match the batch size
+                # print("camera last frame shape", np.shape(camera_obs["camera_0_last_frame"]))
 
         # align robot obs
+        # print("aligning robot obs")
         robot_timestamps = last_robot_data['robot_receive_timestamp']
         this_timestamps = robot_timestamps
         this_idxs = list()
@@ -301,21 +332,51 @@ class RealEnv:
                 this_idx = is_before_idxs[-1]
             this_idxs.append(this_idx)
 
-        robot_obs_raw = dict()
+        current_obs_raw = dict()
         # print(last_robot_data)
         for k, v in last_robot_data.items():
             if k in self.obs_key_map:
                 # print(f"current obs {k}, current value{v}")
-                robot_obs_raw[self.obs_key_map[k]] = v
+                current_obs_raw[self.obs_key_map[k]] = v
+                if k == 'ActualTCPPose':
+                    q_poses = np.zeros((np.shape(v)[0], 7))
+                    # add quaternion eef pose to observation dictionary
+                    for idx,pose in enumerate(v):
+                        quaternion_angles = st.Rotation.from_rotvec(pose[3:]).as_quat()
+                        q_poses[idx][:3] = pose[0:3]
+                        q_poses[idx][3:] = quaternion_angles[:]
+                    current_obs_raw['robot_eef_quat'] = q_poses
+                    
+
+                    # current_obs_raw['robot_eef_quat'] = st.Rotation.from_rotvec(v).as_quat()
+        # print("current obs raw",current_obs_raw)
+        if text_conditioned:
+            # extract current text goal
+            text_file_path = self.text_dir.joinpath("current_text_goal.txt")
+            text_file_path.touch(exist_ok=True) # ensure text file exists
+            with open(text_file_path) as current_text_goal_file:
+                self.current_text_goal = current_text_goal_file.read()
+            # encoded_text = self.text_encoder.encode(current_text_goal)
+            # print("print current text", current_text_goal)
+            self.current_text_goal = self.current_text_goal
+            # add text goal to obs_raw
+            length = len(next(iter(current_obs_raw.values())))
+            current_obs_raw["current_text_goal"] = np.array([self.current_text_goal] * length)
+            encoded_current_text_goal = self.text_encoder.encode(self.current_text_goal)
+            current_obs_raw["encoded_current_text_goal"] = np.array([encoded_current_text_goal] * length)
+
+
         
         robot_obs = dict()
-        for k, v in robot_obs_raw.items():
+        for k, v in current_obs_raw.items():
             robot_obs[k] = v[this_idxs]
+
+        # print("current obs raw", current_obs_raw)
 
         # accumulate obs
         if self.obs_accumulator is not None:
             self.obs_accumulator.put(
-                robot_obs_raw,
+                current_obs_raw,
                 robot_timestamps
             )
 
@@ -423,6 +484,7 @@ class RealEnv:
             dt=1/self.frequency
         )
         print(f'Episode {episode_id} started!')
+        print("current goal", self.current_text_goal)
     
     def end_episode(self):
         "Stop recording"
@@ -469,4 +531,20 @@ class RealEnv:
         if this_video_dir.exists():
             shutil.rmtree(str(this_video_dir))
         print(f'Episode {episode_id} dropped!')
+
+    def save_current_frame(self):
+        
+        assert self.is_ready
+        print("ready asserted")
+
+        # create single images
+        n_cameras = self.realsense.n_cameras
+        image_paths = list()
+        for i in range(n_cameras):
+            image_paths.append(
+                str(self.image_dir.joinpath(f'{i}.png').absolute()))
+        
+        self.realsense.multi_save_snap(image_path = image_paths)
+
+        
 

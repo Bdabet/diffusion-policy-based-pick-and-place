@@ -1,6 +1,6 @@
 """
 Usage:
-(robodiff)$ python eval_real_robot_gripper.py -i <ckpt_path> -o <save_dir> --robot_ip <ip_of_ur5>
+(robodiff)$ python3 eval_real_robot_gripper.py -i <ckpt_path> -o <save_dir> --robot_ip <ip_of_ur5>
 
 ================ Human in control ==============
 Robot movement:
@@ -65,10 +65,12 @@ OmegaConf.register_new_resolver("eval", eval, replace=True)
 @click.option('--max_duration', '-md', default=180, help='Max duration for each epoch in seconds.')
 @click.option('--frequency', '-f', default=10, type=float, help="Control frequency in Hz.")
 @click.option('--command_latency', '-cl', default=0.01, type=float, help="Latency between receiving SapceMouse command to executing on Robot in Sec.")
+@click.option('--image_conditioning', '-icond', default = False, type= bool, help="policy conditioning using image (True/False)")
+@click.option('--text_conditioning', '-tcond', default = False, type= bool, help="policy conditioning using text (True/False)")
 def main(input, output, robot_ip, match_dataset, match_episode,
     vis_camera_idx, init_joints, 
     steps_per_inference, max_duration,
-    frequency, command_latency):
+    frequency, command_latency, image_conditioning, text_conditioning):
 
 
 
@@ -179,22 +181,21 @@ def main(input, output, robot_ip, match_dataset, match_episode,
             env.realsense.set_exposure(exposure=120, gain=0)
             # realsense white balance
             env.realsense.set_white_balance(white_balance=5900)
-
             
             time.sleep(1.0)
 
-            print("Warming up policy inference")
-            obs = env.get_obs()
-            with torch.no_grad():
-                policy.reset()
-                obs_dict_np = get_real_obs_dict(
-                    env_obs=obs, shape_meta=cfg.task.shape_meta)
-                obs_dict = dict_apply(obs_dict_np, 
-                    lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
-                result = policy.predict_action(obs_dict)
-                action = result['action'][0].detach().to('cpu').numpy()
-                assert action.shape[-1] == 7
-                del result
+            # print("Warming up policy inference")
+            # obs = env.get_obs(conditioned=conditioned)
+            # with torch.no_grad():
+            #     policy.reset()
+            #     obs_dict_np = get_real_obs_dict(
+            #         env_obs=obs, shape_meta=cfg.task.shape_meta)
+            #     obs_dict = dict_apply(obs_dict_np, 
+            #         lambda x: torch.from_numpy(x).unsqueeze(0).to(device))
+            #     result = policy.predict_action(obs_dict)
+            #     action = result['action'][0].detach().to('cpu').numpy()
+            #     assert action.shape[-1] == 7
+            #     del result
 
             print('Ready!')
             
@@ -223,19 +224,20 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                     # pump obs
                     # obs = env.get_obs()
 
-                 
-
-
                     press_events = key_counter.get_press_events()
                     # print(f"Press events: {press_events}")
 
                     for key_stroke in press_events:
                     
-                        if key_stroke == KeyCode(char='q'):
+                        if key_stroke == key_stroke == Key.esc:
                             # Exit program
                             env.end_episode()
                             exit(0)
-                        elif key_stroke == KeyCode(char='c'):
+                        elif key_stroke == Key.f5:
+                            print("saving cvurrent fram")
+                            env.save_current_frame()
+                            print("saved current frame")
+                        elif key_stroke == Key.f2:
                             # Exit human control loop
                             # hand control over to the policy
                             exit_while_loop = True
@@ -338,7 +340,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
 
                         # get obs
                         print('get_obs')
-                        obs = env.get_obs()
+                        obs = env.get_obs( image_conditioned = image_conditioning, text_conditioned = text_conditioning)
 
                         # print ("observation", obs)
                         obs_timestamps = obs['timestamp']
@@ -366,14 +368,14 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             this_target_pose = perv_target_pose.copy()
                             this_target_pose[[0,1]] += action[-1]
                             perv_target_pose = this_target_pose
-                            this_target_poses = np.expand_dims(this_target_pose, axis=0)
+                            this_actions = np.expand_dims(this_target_pose, axis=0)
                         else:
-                            this_target_poses = np.zeros((len(action), len(action_array)), dtype=np.float64)
-                            print("zeros target pose", this_target_poses)
-                            this_target_poses[:] = action_array
-                            print("initial target pose", this_target_poses)
-                            this_target_poses[:,:] = action
-                            print("initially predicted target poses", this_target_poses)
+                            this_actions = np.zeros((len(action), len(action_array)), dtype=np.float64)
+                            print("zeros target pose", this_actions)
+                            this_actions[:] = action_array
+                            print("initial target pose", this_actions)
+                            this_actions[:,:] = action
+                            print("initially predicted target poses", this_actions)
                             print("action 2", action)
 
                         # deal with timing
@@ -386,14 +388,14 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         print("after is new")
                         if np.sum(is_new) == 0:
                             # exceeded time budget, still do something
-                            this_target_poses = this_target_poses[[-1]]
+                            this_actions = this_actions[[-1]]
                             # schedule on next available step
                             next_step_idx = int(np.ceil((curr_time - eval_t_start) / dt))
                             action_timestamp = eval_t_start + (next_step_idx) * dt
                             print('Over budget', action_timestamp - curr_time)
                             action_timestamps = np.array([action_timestamp])
                         else:
-                            this_target_poses = this_target_poses[is_new]
+                            this_actions = this_actions[is_new]
                             action_timestamps = action_timestamps[is_new]
                             
 
@@ -408,23 +410,16 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         #     print("Unclipped:", unclipped_target_poses)
                         #     print("Clipped:", this_target_poses)
 
-                        # print("this target poses after new", this_target_poses)
-                        # action_to_send = np.zeros_like(this_target_poses)
-                        # # rehsape action to send to add gripper column
-                        # np.zeros_like(-1, np.shape(this_target_poses)[1])
-                        # print("action to send 1")
-                        # action_to_send[:,:6] = this_target_poses[:,:6]
-                        # print("action to send 2")
-                        # action_to_send[:,6] = np.round(action[:,6])
+
 
                         # print("sent action", action_to_send)
 
                         # execute actions
                         env.exec_actions(
-                            actions=this_target_poses,
+                            actions=this_actions,
                             timestamps=action_timestamps
                         )
-                        print(f"Submitted {len(this_target_poses)} steps of actions.")
+                        print(f"Submitted {len(this_actions)} steps of actions.")
 
                         
 
@@ -434,10 +429,10 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         press_events = key_counter.get_press_events()
                         exit_stop_while_loop = False
                         for key_stroke in press_events:
-                            if key_stroke == KeyCode(char='s'):
+                            if key_stroke == key_stroke == Key.f3:
                                 # Stop episode
                                 # Hand control back to human
-                                print("pess events in stop loop:", press_events)
+                                print("press events in stop loop:", press_events)
                                 print('Stopping episode...')
                                 env.end_episode()
                                 terminate = True

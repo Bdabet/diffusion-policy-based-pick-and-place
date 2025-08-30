@@ -219,6 +219,23 @@ class MultiRealsense:
         for i, camera in enumerate(self.cameras.values()):
             camera.stop_recording()
     
+    def multi_save_snap(self, image_path: Union[str, List[str]]):
+        if isinstance(image_path, str):
+            # directory
+            image_path_dir = pathlib.Path(image_path)
+            assert image_path.parent.is_dir()
+            image_path_dir.mkdir(parents=True, exist_ok=True)
+            image_path = list()
+            for i in range(self.n_cameras):
+                image_path.append(
+                    str(image_path_dir.joinpath(f'{i}.png').absolute()))
+        assert len(image_path) == self.n_cameras
+
+        for i, camera in enumerate(self.cameras.values()):
+            camera.take_snapshot(image_path[i])
+
+
+
     def restart_put(self, start_time):
         for camera in self.cameras.values():
             camera.restart_put(start_time)

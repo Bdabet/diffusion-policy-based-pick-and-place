@@ -1,6 +1,6 @@
 """
 Usa
-(robodiff)$ python demo_real_robot_gripper.py -o <demo_save_dir> --robot_ip <ip_of_ur5>
+(robodiff)$ python3 demo_real_robot_gripper.py -o <demo_save_dir> --robot_ip <ip_of_ur5>
 
 Robot movement:
 Move your SpaceMouse to move the robot EEF (locked in xy plane).
@@ -39,14 +39,14 @@ from diffusion_policy.common.transformation_related_functions import rotate_arou
 @click.option('--init_joints', '-j', is_flag=True, default=False, help="Whether to initialize robot joint configuration in the beginning.")
 @click.option('--frequency', '-f', default=10, type=float, help="Control frequency in Hz.")
 @click.option('--command_latency', '-cl', default=0.01, type=float, help="Latency between receiving SapceMouse command to executing on Robot in Sec.")
+@click.option('--text_conditioning', '-tcond', default = False, type= bool, help="policy conditioning using text (True/False)")
 
 
 
 
 
 
-
-def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_latency):
+def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_latency, text_conditioning):
     dt = 1/frequency
     with SharedMemoryManager() as shm_manager:
         with KeystrokeCounter() as key_counter, \
@@ -102,7 +102,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 t_command_target = t_cycle_end + dt
 
                 # pump obs
-                env.get_obs()
+                env.get_obs(text_conditioned = text_conditioning)
 
                 # print("waiting for press events")
 
@@ -110,22 +110,25 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 press_events = key_counter.get_press_events()
                 # print(f"press_events: {press_events}")
                 for key_stroke in press_events:
-                    if key_stroke == KeyCode(char='l'):
+                    if key_stroke == KeyCode(char='/'):
                         # Exit program
                         stop = True
-                    elif key_stroke == KeyCode(char='j'):
+                    elif key_stroke == Key.f2:
                         # Start recording
+                        if text_conditioning and not env.is_goal_text_valid():
+                            print("Current text goal is not valid! Please check the format.")
+                            continue
                         env.start_episode(t_start + (iter_idx + 2) * dt - time.monotonic() + time.time())
                         key_counter.clear()
                         is_recording = True
                         print('Recording!')
-                    elif key_stroke == KeyCode(char='k'):
+                    elif key_stroke == Key.f3:
                         # Stop recording
                         env.end_episode()
                         key_counter.clear()
                         is_recording = False
                         print('Stopped.')
-                    elif key_stroke == Key.backspace:
+                    elif key_stroke == KeyCode(char='-'):
                         # Delete the most recent recorded episode
                         if click.confirm('Are you sure to drop an episode?'):
                             env.drop_episode()
@@ -181,8 +184,8 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
 
 
                 dpos = sm_state[:3] * (env.max_pos_speed / frequency)
-                if np.any(dpos != 0):
-                    print(f"dpos: {dpos}")
+                # if np.any(dpos != 0):
+                #     print(f"dpos: {dpos}")
 
                 
                 
