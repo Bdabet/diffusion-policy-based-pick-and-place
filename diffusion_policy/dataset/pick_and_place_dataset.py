@@ -25,7 +25,7 @@ from diffusion_policy.common.normalize_util import (
     array_to_stats
 )
 
-class RealPushTImageDataset(BaseImageDataset):
+class PickPlaceDataset(BaseImageDataset):
     def __init__(self,
             shape_meta: dict,
             dataset_path: str,
