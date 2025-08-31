@@ -109,16 +109,22 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
             output_dir=self.output_dir)
         assert isinstance(env_runner, BaseImageRunner)
 
+
+        # set wandb API key for login
+        wandb.login(key = "64db7fbddb62aa9b361bac0b2415a533659da080")
+
         # configure logging
         wandb_run = wandb.init(
             dir=str(self.output_dir),
+            settings=wandb.Settings(x_disable_stats=True),
             config=OmegaConf.to_container(cfg, resolve=True),
             **cfg.logging
         )
         wandb.config.update(
             {
                 "output_dir": self.output_dir,
-            }
+            }, 
+             allow_val_change=True,    
         )
 
         # configure checkpoint
