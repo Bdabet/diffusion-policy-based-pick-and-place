@@ -6,6 +6,7 @@ import shutil
 import math
 import cv2
 import scipy.spatial.transform as st
+import json
 from multiprocessing.managers import SharedMemoryManager
 from diffusion_policy.real_world.rtde_interpolation_controller import RTDEInterpolationController
 from diffusion_policy.real_world.multi_realsense import MultiRealsense, SingleRealsense
@@ -72,17 +73,31 @@ class RealEnv:
             enable_multi_cam_vis=True,
             multi_cam_vis_resolution=(1280,720),
             # shared memory
-            shm_manager=None
+            shm_manager=None,
+            image_conditioned=False,
+            text_conditioned=False,
+            n_positions=3,
             ):
         assert frequency <= video_capture_fps
         output_dir = pathlib.Path(output_dir)
         assert output_dir.parent.is_dir()
         video_dir = output_dir.joinpath('videos')
         video_dir.mkdir(parents=True, exist_ok=True)
-        image_dir = output_dir.joinpath('current_frame')
-        image_dir.mkdir(parents=True, exist_ok=True)
-        text_dir = output_dir.joinpath('current_text_goal')
-        text_dir.mkdir(parents=True, exist_ok=True)
+        if image_conditioned:
+            image_dir = output_dir.joinpath('current_frame')   
+            image_dir.mkdir(parents=True, exist_ok=True)
+        
+        if text_conditioned:
+            # create text goal dir
+            text_dir = output_dir.joinpath('current_text_goal')
+            text_dir.mkdir(parents=True, exist_ok=True)
+            # create initial template text array
+            current_text_goal = ["put the -- -- at position 0 at height 0"]*n_positions
+            # save initial template text array as json 
+            json_array = json.dumps(current_text_goal, indent=4)
+            with open(text_dir.joinpath("current_text_goal.json"), 'w') as f:
+                f.write(json_array)
+
         zarr_path = str(output_dir.joinpath('replay_buffer.zarr').absolute())
         replay_buffer = ReplayBuffer.create_from_path(zarr_path=zarr_path, mode='a')
 
@@ -229,12 +244,17 @@ class RealEnv:
         return self.realsense.is_ready and self.robot.is_ready
     
     def is_goal_text_valid(self):
-        text_file_path = self.text_dir.joinpath("current_text_goal.txt")
-        text_file_path.touch(exist_ok=True) # ensure text file exists
-        with open(text_file_path) as current_text_goal_file:
-            current_text_goal = current_text_goal_file.read()
-        return check_text_format(current_text_goal)
-    
+        # extract current text goal
+        text_file_path = self.text_dir.joinpath("current_text_goal.json")
+        with open(text_file_path, 'r') as current_text_goal_file:
+            current_text_goal_list = json.load(current_text_goal_file)
+
+        for idx, current_text_goal in enumerate(current_text_goal_list):
+            if not check_text_format(current_text_goal):
+                print(f"Invalid text format for text number {idx+1}: {current_text_goal}")
+                return False
+        return True
+
     def start(self, wait=True):
         self.realsense.start(wait=False)
         # print("reached robot.start")
@@ -351,14 +371,18 @@ class RealEnv:
                     # current_obs_raw['robot_eef_quat'] = st.Rotation.from_rotvec(v).as_quat()
         # print("current obs raw",current_obs_raw)
         if text_conditioned:
-            # extract current text goal
-            text_file_path = self.text_dir.joinpath("current_text_goal.txt")
-            text_file_path.touch(exist_ok=True) # ensure text file exists
-            with open(text_file_path) as current_text_goal_file:
-                self.current_text_goal = current_text_goal_file.read()
-            # encoded_text = self.text_encoder.encode(current_text_goal)
-            # print("print current text", current_text_goal)
-            self.current_text_goal = self.current_text_goal
+
+             # extract current text goal
+            text_file_path = self.text_dir.joinpath("current_text_goal.json")
+            with open(text_file_path, 'r') as current_text_goal_file:
+                current_text_goal_list = json.load(current_text_goal_file)
+
+            print("asserting text format")
+            for current_text_goal in self.current_text_goal_list:
+                assert check_text_format(current_text_goal)
+
+            self.current_text_goal = "".join(current_text_goal_list)
+
             # add text goal to obs_raw
             length = len(next(iter(current_obs_raw.values())))
             current_obs_raw["current_text_goal"] = np.array([self.current_text_goal] * length)
@@ -389,7 +413,9 @@ class RealEnv:
     def exec_actions(self, 
             actions: np.ndarray, 
             timestamps: np.ndarray, 
-            stages: Optional[np.ndarray]=None):
+            stages: Optional[np.ndarray]=None,
+            quaternions: bool = False
+            ):
         assert self.is_ready
         if not isinstance(actions, np.ndarray):
             actions = np.array(actions)
@@ -432,12 +458,31 @@ class RealEnv:
                 self.robot.gripper_command(False)
                 #send open command
  
-        # record actions
-        if self.action_accumulator is not None:
-            self.action_accumulator.put(
-                new_actions,
-                new_timestamps
-            )
+        # record actions according to required pose form
+        if not quaternions:
+            if self.action_accumulator is not None:
+                self.action_accumulator.put(
+                    new_actions,
+                    new_timestamps
+                )
+        else:
+            new_actions_quat = np.zeros((np.shape(new_actions)[0], 8))
+            for i in range(len(new_actions)):
+                # Copy position part
+                new_actions_quat[i][0:3] = new_actions[i][0:3]
+                # Convert rotation vector to quaternion
+                new_actions_quat[i][3:7] = st.Rotation.from_rotvec(new_actions[i][3:6]).as_quat()
+                # Copy gripper action (last slot)
+                new_actions_quat[i][7] = new_actions[i][6]
+            if self.action_accumulator is not None:
+                # convert poses in action to uquaternions
+                if self.action_accumulator is not None:
+                    self.action_accumulator.put(
+                        new_actions_quat,
+                        new_timestamps
+                    )
+                
+
         if self.stage_accumulator is not None:
             self.stage_accumulator.put(
                 new_stages,
