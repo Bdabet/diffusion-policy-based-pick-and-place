@@ -17,7 +17,7 @@ from diffusion_policy.model.common.normalizer import LinearNormalizer, SingleFie
 from diffusion_policy.common.replay_buffer import ReplayBuffer
 from diffusion_policy.common.sampler import (
     SequenceSampler, get_val_mask, downsample_mask)
-from diffusion_policy.real_world.real_data_conversion import real_data_to_replay_buffer
+from diffusion_policy.real_world.real_data_conversion_with_last_frame import real_data_to_replay_buffer
 from diffusion_policy.common.normalize_util import (
     get_range_normalizer_from_stat,
     get_image_range_normalizer,
@@ -25,7 +25,7 @@ from diffusion_policy.common.normalize_util import (
     array_to_stats
 )
 
-class PickPlaceDataset(BaseImageDataset):
+class PickPlaceDatasetConditioned(BaseImageDataset):
     def __init__(self,
             shape_meta: dict,
             dataset_path: str,
@@ -246,10 +246,10 @@ def _get_replay_buffer(dataset_path, shape_meta, store):
             lowdim_keys.append(key)
             lowdim_shapes[key] = tuple(shape)
             if 'pose' in key:
-                assert tuple(shape) in [(2,),(6,),(7,)]
-
+                assert tuple(shape) in [(2,),(6,)]
+    
     action_shape = tuple(shape_meta['action']['shape'])
-    assert action_shape in [(7,),(8,)]
+    assert action_shape in [(7,)]
 
     # load data
     cv2.setNumThreads(1)
