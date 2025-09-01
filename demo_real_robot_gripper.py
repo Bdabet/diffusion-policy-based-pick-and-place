@@ -35,18 +35,17 @@ from diffusion_policy.common.transformation_related_functions import rotate_arou
 @click.command()
 @click.option('--output', '-o', required=True, help="Directory to save demonstration dataset.")
 @click.option('--robot_ip', '-ri', required=True, help="UR5's IP address e.g. 192.168.0.204")
-@click.option('--vis_camera_idx', default=0, type=int, help="Which RealSense camera to visualize.")
 @click.option('--init_joints', '-j', is_flag=True, default=False, help="Whether to initialize robot joint configuration in the beginning.")
 @click.option('--frequency', '-f', default=10, type=float, help="Control frequency in Hz.")
 @click.option('--command_latency', '-cl', default=0.01, type=float, help="Latency between receiving SapceMouse command to executing on Robot in Sec.")
 @click.option('--text_conditioning', '-tcond', default = False, type= bool, help="policy conditioning using text (True/False)")
+@click.option('--image_conditioning', '-icond', default = False, type= bool, help="policy conditioning using image (True/False)")
+@click.option('--quaternion', '-q', is_flag=True, default=False, help="Whether to use quaternion for rotation representation.")
 
 
 
 
-
-
-def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_latency, text_conditioning):
+def main(output, robot_ip,  init_joints, frequency, command_latency, text_conditioning, image_conditioning, quaternion):
     dt = 1/frequency
     with SharedMemoryManager() as shm_manager:
         with KeystrokeCounter() as key_counter, \
@@ -64,7 +63,9 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 thread_per_video=3,
                 # video recording quality, lower is better (but slower).
                 video_crf=21,
-                shm_manager=shm_manager
+                shm_manager=shm_manager,
+                image_conditioned=image_conditioning,   
+                text_conditioned=text_conditioning,
             ) as env:
 
             cv2.setNumThreads(1)
@@ -203,7 +204,8 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                 env.exec_actions(
                     actions=[action_array], 
                     timestamps=[t_command_target-time.monotonic()+time.time()],
-                    stages=[stage])
+                    stages=[stage],
+                    quaternions=quaternion)
                 precise_wait(t_cycle_end)   
                 iter_idx += 1
 

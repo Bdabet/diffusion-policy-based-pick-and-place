@@ -173,7 +173,9 @@ def main(input, output, robot_ip, match_dataset, match_episode,
             thread_per_video=3,
             # video recording quality, lower is better (but slower).
             video_crf=21,
-            shm_manager=shm_manager) as env:
+            shm_manager=shm_manager,
+            image_conditioned=image_conditioning,
+            text_conditioned=text_conditioning) as env:
             cv2.setNumThreads(1)
 
             # Should be the same as demo
@@ -258,26 +260,17 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                     if button_cicked[1]:
                         # convert target pose to euler format
                         target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
-                    
-                        
                         # rotate target pose around local z
                         target_pose = rotate_around_local_z(target_pose, 1)
-                        
-                        
                         # convert target pose back to rotvec
                         target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
 
 
                     elif button_cicked[2]:
-
                         # convert target pose to euler format
                         target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
-                        
-                        
                         # rotate target pose around local z
                         target_pose = rotate_around_local_z(target_pose, -1)
-                        
-
                         # convert target pose back to rotvec
                         target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
                 
