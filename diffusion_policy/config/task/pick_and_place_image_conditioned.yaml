@@ -1,4 +1,4 @@
-name: pick_and_place_text_conditioned_q
+name: pick_and_place_image_conditioned
 
 image_shape: [3, 240, 320]
 dataset_path: data/pusht_real/real_pusht_20230105
@@ -15,25 +15,30 @@ shape_meta: &shape_meta
     camera_2:
       shape: ${task.image_shape}
       type: rgb
+    camera_0_last_frame:
+      shape: ${task.image_shape}
+      type: rgb
+    camera_1_last_frame:
+      shape: ${task.image_shape}
+      type: rgb
+    # camera_2_last_frame:
+    #   shape: ${task.image_shape}
+    #   type: rgb
 
-    robot_eef_quat:
-      shape: [7]
+    robot_eef_pose:
+      shape: [6]
       type: low_dim
     gripper_state:
       shape: [1]
       type: low_dim
-    encoded_current_text_goal:
-      shape: [384]
-      type: low_dim
-     
   action: 
-    shape: [8] # robot_pose + gripper state
+    shape: [7] # robot_pose + gripper state
 
 env_runner:
   _target_: diffusion_policy.env_runner.real_pusht_image_runner.RealPushTImageRunner
 
 dataset:
-  _target_: diffusion_policy.dataset.pick_and_place_dataset.PickPlaceDataset
+  _target_: diffusion_policy.dataset.pick_and_place_dataset_image_conditioned.PickPlaceDatasetConditioned
   shape_meta: *shape_meta
   dataset_path: ${task.dataset_path}
   horizon: ${horizon}
