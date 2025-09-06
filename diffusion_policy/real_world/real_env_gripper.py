@@ -77,6 +77,7 @@ class RealEnv:
             image_conditioned=False,
             text_conditioned=False,
             n_positions=3,
+            balanced_configs=False,
             ):
         assert frequency <= video_capture_fps
         output_dir = pathlib.Path(output_dir)
@@ -87,16 +88,25 @@ class RealEnv:
             image_dir = output_dir.joinpath('current_frame')   
             image_dir.mkdir(parents=True, exist_ok=True)
         
-        if text_conditioned:
+        if text_conditioned and not balanced_configs:
             # create text goal dir
             text_dir = output_dir.joinpath('current_text_goal')
-            text_dir.mkdir(parents=True, exist_ok=True)
-            # create initial template text array
-            current_text_goal = ["put the -- -- at position 0 at height 0"]*n_positions
-            # save initial template text array as json 
-            json_array = json.dumps(current_text_goal, indent=4)
-            with open(text_dir.joinpath("current_text_goal.json"), 'w') as f:
-                f.write(json_array)
+            if not text_dir.exists():
+                text_dir.mkdir(parents=True, exist_ok=True)
+                # create initial template text array
+                current_text_goal = ["put the -- -- at position 0 at height 0"]*n_positions
+                # save initial template text array as json 
+                json_array = json.dumps(current_text_goal, indent=4)
+                with open(text_dir.joinpath("current_text_goal.json"), 'w') as f:
+                    f.write(json_array)
+        elif text_conditioned and balanced_configs:
+            text_dir = None
+            balanced_configs_path = "/workspace/diffusion_policy/diffusion_policy/common/balanced_configs.json"
+            print(f"Loading balanced configurations from {balanced_configs_path}")
+            with open(balanced_configs_path, 'r') as balanced_configs_file:
+                self.balanced_configs = json.load(balanced_configs_file)#
+            print(f"Loaded {len(self.balanced_configs)} balanced configurations.")
+
 
         zarr_path = str(output_dir.joinpath('replay_buffer.zarr').absolute())
         replay_buffer = ReplayBuffer.create_from_path(zarr_path=zarr_path, mode='a')
@@ -222,8 +232,10 @@ class RealEnv:
         # recording
         self.output_dir = output_dir
         self.video_dir = video_dir
-        self.image_dir = image_dir
-        self.text_dir = text_dir
+        if image_conditioned:
+            self.image_dir = image_dir
+        if text_conditioned:
+            self.text_dir = text_dir
         self.current_text_goal = None
         self.replay_buffer = replay_buffer
         # temp memory buffers
@@ -244,12 +256,8 @@ class RealEnv:
         return self.realsense.is_ready and self.robot.is_ready
     
     def is_goal_text_valid(self):
-        # extract current text goal
-        text_file_path = self.text_dir.joinpath("current_text_goal.json")
-        with open(text_file_path, 'r') as current_text_goal_file:
-            current_text_goal_list = json.load(current_text_goal_file)
 
-        for idx, current_text_goal in enumerate(current_text_goal_list):
+        for idx, current_text_goal in enumerate(self.current_text_goal_list):
             if not check_text_format(current_text_goal):
                 print(f"Invalid text format for text number {idx+1}: {current_text_goal}")
                 return False
@@ -370,18 +378,24 @@ class RealEnv:
 
                     # current_obs_raw['robot_eef_quat'] = st.Rotation.from_rotvec(v).as_quat()
         # print("current obs raw",current_obs_raw)
-        if text_conditioned:
-
+        if text_conditioned and not self.balanced_configs:
              # extract current text goal
             text_file_path = self.text_dir.joinpath("current_text_goal.json")
             with open(text_file_path, 'r') as current_text_goal_file:
-                current_text_goal_list = json.load(current_text_goal_file)
+                self.current_text_goal_list = json.load(current_text_goal_file)
 
-            print("asserting text format")
-            for current_text_goal in self.current_text_goal_list:
-                assert check_text_format(current_text_goal)
+            self.current_text_goal = "".join(self.current_text_goal_list)
 
-            self.current_text_goal = "".join(current_text_goal_list)
+            # add text goal to obs_raw
+            length = len(next(iter(current_obs_raw.values())))
+            current_obs_raw["current_text_goal"] = np.array([self.current_text_goal] * length)
+            encoded_current_text_goal = self.text_encoder.encode(self.current_text_goal)
+            current_obs_raw["encoded_current_text_goal"] = np.array([encoded_current_text_goal] * length)
+        elif text_conditioned and self.balanced_configs:
+            
+            # extract current text goal from balanced configs based on episode number
+            self.current_text_goal_list = self.balanced_configs[int(self.replay_buffer.n_episodes)]
+            self.current_text_goal = "".join(self.current_text_goal_list)
 
             # add text goal to obs_raw
             length = len(next(iter(current_obs_raw.values())))
@@ -389,8 +403,7 @@ class RealEnv:
             encoded_current_text_goal = self.text_encoder.encode(self.current_text_goal)
             current_obs_raw["encoded_current_text_goal"] = np.array([encoded_current_text_goal] * length)
 
-
-        
+    
         robot_obs = dict()
         for k, v in current_obs_raw.items():
             robot_obs[k] = v[this_idxs]
@@ -475,6 +488,7 @@ class RealEnv:
                 # Copy gripper action (last slot)
                 new_actions_quat[i][7] = new_actions[i][6]
             if self.action_accumulator is not None:
+                print("saved new sc actions quat", new_actions_quat)
                 # convert poses in action to uquaternions
                 if self.action_accumulator is not None:
                     self.action_accumulator.put(
@@ -528,6 +542,7 @@ class RealEnv:
             start_time=start_time,
             dt=1/self.frequency
         )
+
         print(f'Episode {episode_id} started!')
         print("current goal", self.current_text_goal)
     
@@ -590,6 +605,8 @@ class RealEnv:
                 str(self.image_dir.joinpath(f'{i}.png').absolute()))
         
         self.realsense.multi_save_snap(image_path = image_paths)
+    
+
 
         
 
