@@ -18,9 +18,9 @@ shape_meta: &shape_meta
     camera_0_last_frame:
       shape: ${task.image_shape}
       type: rgb
-    camera_1_last_frame:
-      shape: ${task.image_shape}
-      type: rgb
+    # camera_1_last_frame:
+    #   shape: ${task.image_shape}
+    #   type: rgb
     # camera_2_last_frame:
     #   shape: ${task.image_shape}
     #   type: rgb

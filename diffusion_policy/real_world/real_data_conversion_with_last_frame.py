@@ -163,25 +163,13 @@ def real_data_to_replay_buffer(
                         )
                     arr = out_replay_buffer[arr_name]
 
-                    # allocate last frame array
-                    last_frame_key = f'{arr_name}_last_frame'
-                    if last_frame_key not in out_replay_buffer:
-                        ow, oh = out_img_res
-                        _ = out_replay_buffer.data.require_dataset(
-                            name=last_frame_key,
-                            shape=(n_steps, oh, ow, 3),
-                            chunks=(1, oh, ow, 3),
-                            compressor=image_compressor,
-                            dtype=np.uint8
-                        )
-                    last_frame_arr = out_replay_buffer[last_frame_key]
-
                     image_tf = get_image_transform(
-                        input_res=in_img_res, output_res=out_img_res, bgr_to_rgb=False)
-                    
+                        input_res=in_img_res, output_res=out_img_res, bgr_to_rgb=False)   
+
                     # initialize last frame
                     last_frame = None
-
+                    
+                              
                     for step_idx, frame in enumerate(read_video(
                             video_path=str(video_path),
                             dt=dt,
@@ -189,8 +177,6 @@ def real_data_to_replay_buffer(
                             thread_type='FRAME',
                             thread_count=n_decoding_threads
                         )):
-                        
-
                         if len(futures) >= max_inflight_tasks:
                             # limit number of inflight tasks
                             completed, futures = concurrent.futures.wait(futures, 
@@ -202,25 +188,41 @@ def real_data_to_replay_buffer(
                         
                         global_idx = episode_start + step_idx
                         futures.add(executor.submit(put_img, arr, global_idx, frame))
-
+                        
                         last_frame = frame  # keep last frame
 
                         if step_idx == (episode_length - 1):
                             break
+                    
+                    # allocate last frame array
+                    last_frame_key = f'{arr_name}_last_frame'
+                    if last_frame_key in image_keys:
+                        if last_frame_key not in out_replay_buffer:
+                            ow, oh = out_img_res
+                            _ = out_replay_buffer.data.require_dataset(
+                                name=last_frame_key,
+                                shape=(n_steps, oh, ow, 3),
+                                chunks=(1, oh, ow, 3),
+                                compressor=image_compressor,
+                                dtype=np.uint8
+                            )
+                        last_frame_arr = out_replay_buffer[last_frame_key]
+                    
+                    
 
-                    # Fill the last-frame array for each step in this episode
-                    for i in range(episode_length):
+                        # Fill the last-frame array for each step in this episode
+                        for i in range(episode_length):
 
-                        if len(futures) >= max_inflight_tasks:
-                            # limit number of inflight tasks
-                            completed, futures = concurrent.futures.wait(futures, 
-                                return_when=concurrent.futures.FIRST_COMPLETED)
-                            for f in completed:
-                                if not f.result():
-                                    raise RuntimeError('Failed to encode image!')
-                            pbar.update(len(completed))
-                        global_idx = episode_start + i
-                        futures.add(executor.submit(put_img, last_frame_arr, global_idx, last_frame))
+                            if len(futures) >= max_inflight_tasks:
+                                # limit number of inflight tasks
+                                completed, futures = concurrent.futures.wait(futures, 
+                                    return_when=concurrent.futures.FIRST_COMPLETED)
+                                for f in completed:
+                                    if not f.result():
+                                        raise RuntimeError('Failed to encode image!')
+                                pbar.update(len(completed))
+                            global_idx = episode_start + i
+                            futures.add(executor.submit(put_img, last_frame_arr, global_idx, last_frame))
 
             completed, futures = concurrent.futures.wait(futures)
             for f in completed:
