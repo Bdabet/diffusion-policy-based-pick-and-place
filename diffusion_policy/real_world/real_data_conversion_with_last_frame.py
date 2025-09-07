@@ -197,6 +197,7 @@ def real_data_to_replay_buffer(
                     
                     # allocate last frame array
                     last_frame_key = f'{arr_name}_last_frame'
+                    print("comparing last frame key:", last_frame_key, last_frame_keys)
                     if last_frame_key in last_frame_keys:
                         if last_frame_key not in out_replay_buffer:
                             ow, oh = out_img_res
