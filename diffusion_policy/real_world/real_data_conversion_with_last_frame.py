@@ -94,10 +94,10 @@ def real_data_to_replay_buffer(
     n_cameras = 0
     camera_idxs = set() 
     if image_keys is not None:
+        last_frame_keys = [k for k in image_keys if 'last_frame' in k] # Keys for last frames
         image_keys = [k for k in image_keys if 'last_frame' not in k] # Only include the main camera keys, skip *_last_frame
         n_cameras = len(image_keys)
         camera_idxs = set(int(x.split('_')[-1]) for x in image_keys)
-        last_frame_keys = [k for k in image_keys if 'last_frame' in k] # Keys for last frames
     else:
         # estimate number of cameras
         episode_video_dir = in_video_dir.joinpath(str(0))
@@ -197,7 +197,6 @@ def real_data_to_replay_buffer(
                     
                     # allocate last frame array
                     last_frame_key = f'{arr_name}_last_frame'
-                    print("comparing last frame key:", last_frame_key, last_frame_keys)
                     if last_frame_key in last_frame_keys:
                         if last_frame_key not in out_replay_buffer:
                             ow, oh = out_img_res
