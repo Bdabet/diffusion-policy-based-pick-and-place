@@ -20,7 +20,7 @@ from diffusion_policy.real_world.multi_camera_visualizer import MultiCameraVisua
 from diffusion_policy.common.replay_buffer import ReplayBuffer
 from diffusion_policy.common.cv2_util import (
     get_image_transform, optimal_row_cols)
-from diffusion_policy.common.check_text_format import check_text_format
+from diffusion_policy.common.conditioning_text_functions import check_text_format, generate_balanced_configurations
 from sentence_transformers import SentenceTransformer
 
 
@@ -78,6 +78,7 @@ class RealEnv:
             text_conditioned=False,
             n_positions=3,
             balanced_configs=False,
+            no_of_repetitions=1,
             ):
         assert frequency <= video_capture_fps
         output_dir = pathlib.Path(output_dir)
@@ -101,10 +102,12 @@ class RealEnv:
                     f.write(json_array)
         elif text_conditioned and balanced_configs:
             text_dir = None
-            balanced_configs_path = "/workspace/diffusion_policy/diffusion_policy/common/balanced_configs.json"
+            balanced_configs_path = output_dir.joinpath("balanced_configs.json")
+            if not balanced_configs_path.exists():
+                generate_balanced_configurations(output_dir, no_of_repetitions=no_of_repetitions)
             print(f"Loading balanced configurations from {balanced_configs_path}")
             with open(balanced_configs_path, 'r') as balanced_configs_file:
-                self.balanced_configs = json.load(balanced_configs_file)#
+                self.balanced_configs = json.load(balanced_configs_file)
             print(f"Loaded {len(self.balanced_configs)} balanced configurations.")
 
 
@@ -385,24 +388,19 @@ class RealEnv:
                 self.current_text_goal_list = json.load(current_text_goal_file)
 
             self.current_text_goal = "".join(self.current_text_goal_list)
-
-            # add text goal to obs_raw
-            length = len(next(iter(current_obs_raw.values())))
-            current_obs_raw["current_text_goal"] = np.array([self.current_text_goal] * length)
-            encoded_current_text_goal = self.text_encoder.encode(self.current_text_goal)
-            current_obs_raw["encoded_current_text_goal"] = np.array([encoded_current_text_goal] * length)
+          
         elif text_conditioned and self.balanced_configs:
             
             # extract current text goal from balanced configs based on episode number
             self.current_text_goal_list = self.balanced_configs[int(self.replay_buffer.n_episodes)]
             self.current_text_goal = "".join(self.current_text_goal_list)
 
-            # add text goal to obs_raw
-            length = len(next(iter(current_obs_raw.values())))
-            current_obs_raw["current_text_goal"] = np.array([self.current_text_goal] * length)
-            encoded_current_text_goal = self.text_encoder.encode(self.current_text_goal)
-            current_obs_raw["encoded_current_text_goal"] = np.array([encoded_current_text_goal] * length)
-
+        
+        # add text goal to obs_raw
+        length = len(next(iter(current_obs_raw.values())))
+        current_obs_raw["current_text_goal"] = np.array([self.current_text_goal] * length)
+        encoded_current_text_goal = self.text_encoder.encode(self.current_text_goal)
+        current_obs_raw["encoded_current_text_goal"] = np.array([encoded_current_text_goal] * length)
     
         robot_obs = dict()
         for k, v in current_obs_raw.items():
