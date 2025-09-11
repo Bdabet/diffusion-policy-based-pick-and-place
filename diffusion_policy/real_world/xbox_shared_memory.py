@@ -160,13 +160,13 @@ class Spacemouse(mp.Process):
             buttons_state = controller.read()
 
             # record x movememnts
-            if abs(buttons_state[1]) > 0.1:
+            if abs(buttons_state[1]) > 0.3:
                 self.motion_event[0] = -buttons_state[1]*120  # X
             else:
                 self.motion_event[0] = 0
 
             # record y movements 
-            if abs(buttons_state[0]) > 0.1:
+            if abs(buttons_state[0]) > 0.3:
                 self.motion_event[1] = -buttons_state[0]*120  # Y
             else:
                 self.motion_event[1] = 0
