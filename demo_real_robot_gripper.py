@@ -40,12 +40,12 @@ from diffusion_policy.common.transformation_related_functions import rotate_arou
 @click.option('--command_latency', '-cl', default=0.01, type=float, help="Latency between receiving SapceMouse command to executing on Robot in Sec.")
 @click.option('--text_conditioning', '-tcond', default = False, type= bool, help="policy conditioning using text (True/False)")
 @click.option('--image_conditioning', '-icond', default = False, type= bool, help="policy conditioning using image (True/False)")
-@click.option('--quaternion', '-q', is_flag=True, default=False, help="Whether to use quaternion for rotation representation.")
+@click.option('--quaternion', '-q', default=False, help="Whether to use quaternion for rotation representation.")
+@click.option('--balanced_configs', '-bc', default=False, help="Whether to use balanced configurations for text goals.")
+@click.option('--no_of_rep', '-nr', default=1, help="Number of repetitions for each configuration.")
 
 
-
-
-def main(output, robot_ip,  init_joints, frequency, command_latency, text_conditioning, image_conditioning, quaternion):
+def main(output, robot_ip,  init_joints, frequency, command_latency, text_conditioning, image_conditioning, quaternion, balanced_configs, no_of_rep):
     dt = 1/frequency
     with SharedMemoryManager() as shm_manager:
         with KeystrokeCounter() as key_counter, \
@@ -66,6 +66,8 @@ def main(output, robot_ip,  init_joints, frequency, command_latency, text_condit
                 shm_manager=shm_manager,
                 image_conditioned=image_conditioning,   
                 text_conditioned=text_conditioning,
+                balanced_configs=balanced_configs,
+                no_of_repetitions=no_of_rep,
             ) as env:
 
             cv2.setNumThreads(1)
@@ -158,12 +160,8 @@ def main(output, robot_ip,  init_joints, frequency, command_latency, text_condit
                 if button_cicked[1]:
                     # convert target pose to euler format
                     target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
-                   
-                    
                     # rotate target pose around local z
                     target_pose = rotate_around_local_z(target_pose, 1)
-                    
-                    
                     # convert target pose back to rotvec
                     target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
 
@@ -172,12 +170,8 @@ def main(output, robot_ip,  init_joints, frequency, command_latency, text_condit
 
                     # convert target pose to euler format
                     target_pose[3:] = st.Rotation.from_rotvec(target_pose[3:]).as_euler('xyz')
-                    
-                    
                     # rotate target pose around local z
                     target_pose = rotate_around_local_z(target_pose, -1)
-                    
-
                     # convert target pose back to rotvec
                     target_pose[3:]= st.Rotation.from_euler('xyz',target_pose[3:]).as_rotvec()
                
