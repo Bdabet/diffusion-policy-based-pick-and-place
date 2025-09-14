@@ -90,6 +90,7 @@ class RealEnv:
             image_dir.mkdir(parents=True, exist_ok=True)
         
         if text_conditioned and not balanced_configs:
+            self.balanced_configs = False
             # create text goal dir
             text_dir = output_dir.joinpath('current_text_goal')
             if not text_dir.exists():
@@ -386,6 +387,7 @@ class RealEnv:
             text_file_path = self.text_dir.joinpath("current_text_goal.json")
             with open(text_file_path, 'r') as current_text_goal_file:
                 self.current_text_goal_list = json.load(current_text_goal_file)
+                print("current text goal list", self.current_text_goal_list)
 
             self.current_text_goal = "".join(self.current_text_goal_list)
           
