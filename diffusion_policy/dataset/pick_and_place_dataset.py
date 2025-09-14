@@ -39,6 +39,7 @@ class PickPlaceDataset(BaseImageDataset):
             val_ratio=0.0,
             max_train_episodes=None,
             delta_action=False,
+            augmentation=False,
         ):
         assert os.path.isdir(dataset_path)
         
@@ -82,7 +83,8 @@ class PickPlaceDataset(BaseImageDataset):
             replay_buffer = _get_replay_buffer(
                 dataset_path=dataset_path,
                 shape_meta=shape_meta,
-                store=zarr.MemoryStore()
+                store=zarr.MemoryStore(),
+                augmentation=augmentation,
             )
         
         if delta_action:
@@ -105,6 +107,8 @@ class PickPlaceDataset(BaseImageDataset):
 
         rgb_keys = list()
         lowdim_keys = list()
+        flags_keys = list()
+
         obs_shape_meta = shape_meta['obs']
         for key, attr in obs_shape_meta.items():
             type = attr.get('type', 'low_dim')
@@ -112,12 +116,17 @@ class PickPlaceDataset(BaseImageDataset):
                 rgb_keys.append(key)
             elif type == 'low_dim':
                 lowdim_keys.append(key)
-        
+
+        flags_shape_meta = shape_meta["flags"]
+        for key, attr in flags_shape_meta.items():
+            flags_keys.append(key)
+
         key_first_k = dict()
         if n_obs_steps is not None:
             # only take first k obs from images
-            for key in rgb_keys + lowdim_keys:
+            for key in rgb_keys + lowdim_keys + flags_keys:
                 key_first_k[key] = n_obs_steps
+            
 
         val_mask = get_val_mask(
             n_episodes=replay_buffer.n_episodes, 
@@ -142,6 +151,7 @@ class PickPlaceDataset(BaseImageDataset):
         self.shape_meta = shape_meta
         self.rgb_keys = rgb_keys
         self.lowdim_keys = lowdim_keys
+        self.flags_keys = flags_keys
         self.n_obs_steps = n_obs_steps
         self.val_mask = val_mask
         self.horizon = horizon
@@ -209,7 +219,12 @@ class PickPlaceDataset(BaseImageDataset):
             # save ram
             del data[key]
         
+        flag_dict = dict()
+        for key in self.flags_keys:
+            flag_dict[key] = data[key][T_slice].astype(np.float32)
+        
         action = data['action'].astype(np.float32)
+
         # handle latency by dropping first n_latency_steps action
         # observations are already taken care of by T_slice
         if self.n_latency_steps > 0:
@@ -217,6 +232,7 @@ class PickPlaceDataset(BaseImageDataset):
 
         torch_data = {
             'obs': dict_apply(obs_dict, torch.from_numpy),
+            'flags': dict_apply(flag_dict, torch.from_numpy),
             'action': torch.from_numpy(action)
         }
         return torch_data
@@ -228,13 +244,15 @@ def zarr_resize_index_last_dim(zarr_arr, idxs):
     zarr_arr[:] = actions
     return zarr_arr
 
-def _get_replay_buffer(dataset_path, shape_meta, store):
+def _get_replay_buffer(dataset_path, shape_meta, store, augmentation=False):
     # parse shape meta
     rgb_keys = list()
     lowdim_keys = list()
+    flags_keys = list()
     out_resolutions = dict()
     lowdim_shapes = dict()
     obs_shape_meta = shape_meta['obs']
+    flags_shape_meta = shape_meta["flags"]
     for key, attr in obs_shape_meta.items():
         type = attr.get('type', 'low_dim')
         shape = tuple(attr.get('shape'))
@@ -247,6 +265,9 @@ def _get_replay_buffer(dataset_path, shape_meta, store):
             lowdim_shapes[key] = tuple(shape)
             if 'pose' in key:
                 assert tuple(shape) in [(2,),(6,),(7,)]
+    
+    for key, attr in flags_shape_meta.items():
+        flags_keys.append(key)
 
     action_shape = tuple(shape_meta['action']['shape'])
     assert action_shape in [(7,),(8,)]
@@ -258,8 +279,9 @@ def _get_replay_buffer(dataset_path, shape_meta, store):
             dataset_path=dataset_path,
             out_store=store,
             out_resolutions=out_resolutions,
-            lowdim_keys=lowdim_keys + ['action'],
-            image_keys=rgb_keys
+            lowdim_keys=lowdim_keys + ['action']+ flags_keys,
+            image_keys=rgb_keys,
+            augmentation=augmentation
         )
 
     # transform lowdim dimensions for x,y motion form
