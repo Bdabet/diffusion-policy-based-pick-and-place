@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - task: pick_and_place_text_conditioned
+  - task: pick_and_place_text_conditioned_
 
 name: train_diffusion_unet_image
 _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
@@ -17,6 +17,7 @@ dataset_obs_steps: ${n_obs_steps}
 past_action_visible: False
 keypoint_visible_rate: 1.0
 obs_as_global_cond: True
+weighted_loss: ${task.weighted_loss}
 
 policy:
   _target_: diffusion_policy.policy.diffusion_unet_image_policy.DiffusionUnetImagePolicy
@@ -61,6 +62,7 @@ policy:
   kernel_size: 5
   n_groups: 8
   cond_predict_scale: True
+  weighted_loss: ${weighted_loss}
 
   # scheduler.step params
   # predict_epsilon: True
@@ -121,12 +123,12 @@ training:
   tqdm_interval_sec: 1.0
 
 logging:
-  project: diffusion_policy_debug
+  project: diffusion_policy_pick_place_text_cond_2_cam
   resume: True
-  mode: online
+  mode: offline
   name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
   tags: ["${name}", "${task_name}", "${exp_name}"]
-  id: yd02k815
+  id: null
   group: null
 
 checkpoint:
