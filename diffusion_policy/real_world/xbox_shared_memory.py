@@ -160,28 +160,28 @@ class Spacemouse(mp.Process):
             buttons_state = controller.read()
 
             # record x movememnts
-            if abs(buttons_state[1]) > 0.3:
-                self.motion_event[0] = -buttons_state[1]*120  # X
+            if abs(buttons_state[1]) > 0.3: # 0.1 caused stick shift 
+                self.motion_event[0] = -buttons_state[1]*200  # X # was 120
             else:
                 self.motion_event[0] = 0
 
             # record y movements 
-            if abs(buttons_state[0]) > 0.3:
-                self.motion_event[1] = -buttons_state[0]*120  # Y
+            if abs(buttons_state[0]) > 0:
+                self.motion_event[1] = -buttons_state[0]*200  # Y
             else:
                 self.motion_event[1] = 0
 
             
             # record z movements
-            if buttons_state[2] > 0:
-                self.motion_event[2] = 50
+            if buttons_state[2] > 0.3:
+                self.motion_event[2] = 100 # was 50
             elif buttons_state[3] > 0:
-                self.motion_event[2] = -50
+                self.motion_event[2] = -100
             else:
                 self.motion_event[2] = 0
 
             # record rotations
-            if buttons_state[5] > 0: # X_button
+            if buttons_state[5] > 0.3: # X_button
                 clockwise_rotation = 1
             elif buttons_state[5] == 0:
                 clockwise_rotation = 0
