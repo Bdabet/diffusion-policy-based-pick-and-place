@@ -1,7 +1,8 @@
-name: pick_and_place_text_conditioned
+name: pick_and_place_text_conditioned_focused_loss
 
 image_shape: [3, 240, 320]
 dataset_path: data/pusht_real/real_pusht_20230105
+weighted_loss: True
 
 shape_meta: &shape_meta
   # acceptable types: rgb, low_dim
@@ -9,12 +10,12 @@ shape_meta: &shape_meta
     camera_0:
       shape: ${task.image_shape}
       type: rgb
-    camera_1:
-      shape: ${task.image_shape}
-      type: rgb
-    camera_2:
-      shape: ${task.image_shape}
-      type: rgb
+    # camera_1:
+    #   shape: ${task.image_shape}
+    #   type: rgb
+    # camera_2:
+    #   shape: ${task.image_shape}
+    #   type: rgb
 
     robot_eef_pose:
       shape: [6]
