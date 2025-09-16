@@ -1,6 +1,6 @@
 """
 Usa
-(robodiff)$ python3 demo_real_robot_gripper.py -o <demo_save_dir> --robot_ip <ip_of_ur5>
+(robodiff)$ python3 demo_real_robot_gripper.py -o <demo_save_dir> --robot_ip 134.28.40.74
 
 Robot movement:
 Move your SpaceMouse to move the robot EEF (locked in xy plane).
@@ -179,8 +179,8 @@ def main(output, robot_ip,  init_joints, frequency, command_latency, text_condit
 
 
                 dpos = sm_state[:3] * (env.max_pos_speed / frequency)
-                # if np.any(dpos != 0):
-                #     print(f"dpos: {dpos}")
+                if np.any(dpos != 0):
+                    print(f"dpos: {dpos}")
 
                 
                 
