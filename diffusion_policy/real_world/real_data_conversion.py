@@ -8,6 +8,7 @@ import numcodecs
 import multiprocessing
 import cv2
 import concurrent.futures
+import threadpoolctl
 from tqdm import tqdm
 from diffusion_policy.common.replay_buffer import ReplayBuffer, get_optimal_chunks
 from diffusion_policy.common.cv2_util import get_image_transform
@@ -47,6 +48,9 @@ def real_data_to_replay_buffer(
             camera_0: (1280, 720)
     image_keys: ['camera_0', 'camera_1']
     """
+    if augmentation:
+        cv2.setNumThreads(0)
+        threadpoolctl.threadpool_limits(1)
     if out_store is None:
         out_store = zarr.MemoryStore()
     if n_decoding_threads <= 0:

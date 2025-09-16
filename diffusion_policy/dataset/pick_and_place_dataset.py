@@ -124,7 +124,7 @@ class PickPlaceDataset(BaseImageDataset):
         key_first_k = dict()
         if n_obs_steps is not None:
             # only take first k obs from images
-            for key in rgb_keys + lowdim_keys + flags_keys:
+            for key in rgb_keys + lowdim_keys:
                 key_first_k[key] = n_obs_steps
             
 
@@ -221,7 +221,8 @@ class PickPlaceDataset(BaseImageDataset):
         
         flag_dict = dict()
         for key in self.flags_keys:
-            flag_dict[key] = data[key][T_slice].astype(np.float32)
+            flag_dict[key] = data[key].astype(np.float32)
+            del data[key]
         
         action = data['action'].astype(np.float32)
 

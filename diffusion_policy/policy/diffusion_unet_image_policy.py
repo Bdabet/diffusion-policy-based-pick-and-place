@@ -27,6 +27,7 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
             kernel_size=5,
             n_groups=8,
             cond_predict_scale=True,
+            weighted_loss = False,
             # parameters passed to step
             **kwargs):
         super().__init__()
@@ -73,6 +74,7 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
         self.n_action_steps = n_action_steps
         self.n_obs_steps = n_obs_steps
         self.obs_as_global_cond = obs_as_global_cond
+        self.weighted_loss = weighted_loss
         self.kwargs = kwargs
 
         if num_inference_steps is None:
@@ -256,8 +258,24 @@ class DiffusionUnetImagePolicy(BaseImagePolicy):
         # print(f"preditced: {pred} vs target: {target}")
         # print(f"predicted - target ={pred - target}")
 
-        loss = F.mse_loss(pred, target, reduction='none')
+
+        loss = F.mse_loss(pred, target, reduction='none')   # [B, T, D]
         loss = loss * loss_mask.type(loss.dtype)
+        if self.weighted_loss:
+            # Get flags 
+            combined_flags = torch.stack(list(batch['flags'].values()), dim=0).sum(dim=0)
+            if combined_flags.ndim == 2:
+                combined_flags = combined_flags.unsqueeze(-1)
+            combined_flags = combined_flags.expand_as(loss)             # match [B, T, D]
+            # Define weighting scheme
+            weight_factor = 1.4   
+            weights = 1.0 + (weight_factor - 1.0) * combined_flags
+            # Apply weights
+            loss = loss * weights
+            print(f"predcition shape {pred.shape}. target shape {target.shape} flag {combined_flags.shape}")
+            print(f"predcition  {pred} target  {target} flag  {combined_flags}")
+
+        # Reduce
         loss = reduce(loss, 'b ... -> b (...)', 'mean')
         loss = loss.mean()
         return loss
