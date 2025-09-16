@@ -1,5 +1,5 @@
 """
-Usa
+Usage
 (robodiff)$ python3 demo_real_robot_gripper.py -o <demo_save_dir> --robot_ip 134.28.40.74
 
 Robot movement:
