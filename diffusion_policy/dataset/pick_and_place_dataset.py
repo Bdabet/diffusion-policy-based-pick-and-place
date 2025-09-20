@@ -40,6 +40,7 @@ class PickPlaceDataset(BaseImageDataset):
             max_train_episodes=None,
             delta_action=False,
             augmentation=False,
+            use_flags=False
         ):
         assert os.path.isdir(dataset_path)
         
@@ -85,6 +86,7 @@ class PickPlaceDataset(BaseImageDataset):
                 shape_meta=shape_meta,
                 store=zarr.MemoryStore(),
                 augmentation=augmentation,
+                use_flags=use_flags
             )
         
         if delta_action:
@@ -107,7 +109,7 @@ class PickPlaceDataset(BaseImageDataset):
 
         rgb_keys = list()
         lowdim_keys = list()
-        flags_keys = list()
+
 
         obs_shape_meta = shape_meta['obs']
         for key, attr in obs_shape_meta.items():
@@ -116,10 +118,13 @@ class PickPlaceDataset(BaseImageDataset):
                 rgb_keys.append(key)
             elif type == 'low_dim':
                 lowdim_keys.append(key)
-
-        flags_shape_meta = shape_meta["flags"]
-        for key, attr in flags_shape_meta.items():
-            flags_keys.append(key)
+            
+        if use_flags:
+                    
+            flags_keys = list()
+            flags_shape_meta = shape_meta["flags"]
+            for key, attr in flags_shape_meta.items():
+                flags_keys.append(key)
 
         key_first_k = dict()
         if n_obs_steps is not None:
@@ -151,7 +156,9 @@ class PickPlaceDataset(BaseImageDataset):
         self.shape_meta = shape_meta
         self.rgb_keys = rgb_keys
         self.lowdim_keys = lowdim_keys
-        self.flags_keys = flags_keys
+        self.use_flags = use_flags
+        if use_flags:
+            self.flags_keys = flags_keys
         self.n_obs_steps = n_obs_steps
         self.val_mask = val_mask
         self.horizon = horizon
@@ -218,11 +225,11 @@ class PickPlaceDataset(BaseImageDataset):
             obs_dict[key] = data[key][T_slice].astype(np.float32)
             # save ram
             del data[key]
-        
-        flag_dict = dict()
-        for key in self.flags_keys:
-            flag_dict[key] = data[key].astype(np.float32)
-            del data[key]
+        if self.use_flags:
+            flag_dict = dict()
+            for key in self.flags_keys:
+                flag_dict[key] = data[key].astype(np.float32)
+                del data[key]
         
         action = data['action'].astype(np.float32)
 
@@ -231,11 +238,17 @@ class PickPlaceDataset(BaseImageDataset):
         if self.n_latency_steps > 0:
             action = action[self.n_latency_steps:]
 
-        torch_data = {
+        if self.use_flags:
+            torch_data = {
             'obs': dict_apply(obs_dict, torch.from_numpy),
             'flags': dict_apply(flag_dict, torch.from_numpy),
             'action': torch.from_numpy(action)
-        }
+            }
+        else:
+            torch_data = {
+            'obs': dict_apply(obs_dict, torch.from_numpy),
+            'action': torch.from_numpy(action)
+            }
         return torch_data
 
 def zarr_resize_index_last_dim(zarr_arr, idxs):
@@ -245,15 +258,14 @@ def zarr_resize_index_last_dim(zarr_arr, idxs):
     zarr_arr[:] = actions
     return zarr_arr
 
-def _get_replay_buffer(dataset_path, shape_meta, store, augmentation=False):
+def _get_replay_buffer(dataset_path, shape_meta, store, augmentation=False, use_flags=False):
     # parse shape meta
     rgb_keys = list()
     lowdim_keys = list()
-    flags_keys = list()
+    
     out_resolutions = dict()
     lowdim_shapes = dict()
     obs_shape_meta = shape_meta['obs']
-    flags_shape_meta = shape_meta["flags"]
     for key, attr in obs_shape_meta.items():
         type = attr.get('type', 'low_dim')
         shape = tuple(attr.get('shape'))
@@ -266,9 +278,12 @@ def _get_replay_buffer(dataset_path, shape_meta, store, augmentation=False):
             lowdim_shapes[key] = tuple(shape)
             if 'pose' in key:
                 assert tuple(shape) in [(2,),(6,),(7,)]
-    
-    for key, attr in flags_shape_meta.items():
-        flags_keys.append(key)
+
+    if use_flags:
+        flags_keys = list()
+        flags_shape_meta = shape_meta["flags"]
+        for key, attr in flags_shape_meta.items():
+            flags_keys.append(key)
 
     action_shape = tuple(shape_meta['action']['shape'])
     assert action_shape in [(7,),(8,)]
@@ -276,11 +291,15 @@ def _get_replay_buffer(dataset_path, shape_meta, store, augmentation=False):
     # load data
     cv2.setNumThreads(1)
     with threadpool_limits(1):
+        # Only include flags_keys if use_flags is True
+        lowdim_and_action_keys = lowdim_keys + ['action']
+        if use_flags:
+            lowdim_and_action_keys += flags_keys
         replay_buffer = real_data_to_replay_buffer(
             dataset_path=dataset_path,
             out_store=store,
             out_resolutions=out_resolutions,
-            lowdim_keys=lowdim_keys + ['action']+ flags_keys,
+            lowdim_keys=lowdim_and_action_keys,
             image_keys=rgb_keys,
             augmentation=augmentation
         )
