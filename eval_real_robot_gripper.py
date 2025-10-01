@@ -1,6 +1,6 @@
 """
 Usage:
-(robodiff)$ python3 eval_real_robot_gripper.py -i <ckpt_path> -o <save_dir> --robot_ip <ip_of_ur5>
+(robodiff)$ python3 eval_real_robot_gripper.py -i <ckpt_path> -o <save_dir> --robot_ip 134.28.40.74
 
 ================ Human in control ==============
 Robot movement:
@@ -78,6 +78,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
     # load match_dataset
     match_camera_idx = 0
     episode_first_frame_map = dict()
+    initial_run = True
     if match_dataset is not None:
         match_dir = pathlib.Path(match_dataset)
         match_video_dir = match_dir.joinpath('videos')
@@ -284,10 +285,13 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                     
                     
                     target_pose[:3] += dpos
-
+                    if initial_run: 
+                        target_pose[2] = 0.13
+                        initial_run = False
                     action_array[:6] = target_pose
                     action_array[6] = float(gripper_state == True)
-
+                   
+                            
 
                     # print("action array", action_array)
 
@@ -303,7 +307,6 @@ def main(input, output, robot_ip, match_dataset, match_episode,
 
 
                     if exit_while_loop:
-                        pause_enabled = False
                         print("Exiting human control loop")
                         terminate = False
                         break
@@ -332,7 +335,7 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         t_cycle_end = t_start + (iter_idx + steps_per_inference) * dt
 
                         # get obs
-                        print('get_obs')
+                        # print('get_obs')
                         obs = env.get_obs( image_conditioned = image_conditioning, text_conditioned = text_conditioning)
 
                         # print ("observation", obs)
@@ -364,12 +367,9 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                             this_actions = np.expand_dims(this_target_pose, axis=0)
                         else:
                             this_actions = np.zeros((len(action), len(action_array)), dtype=np.float64)
-                            print("zeros target pose", this_actions)
                             this_actions[:] = action_array
-                            print("initial target pose", this_actions)
                             this_actions[:,:] = action
-                            print("initially predicted target poses", this_actions)
-                            print("action 2", action)
+                            
 
                         # deal with timing
                         # the same step actions are always the target for
@@ -378,7 +378,6 @@ def main(input, output, robot_ip, match_dataset, match_episode,
                         action_exec_latency = 0.01
                         curr_time = time.time()
                         is_new = action_timestamps > (curr_time + action_exec_latency)
-                        print("after is new")
                         if np.sum(is_new) == 0:
                             # exceeded time budget, still do something
                             this_actions = this_actions[[-1]]
