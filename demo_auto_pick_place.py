@@ -91,6 +91,11 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
             stop = False
             is_recording = False
 
+            FIXED_STARTING_POSITION = [-5.67546541e-01,  9.37104784e-02, 9.49910267e-02, 2.87012257e+00 ,-1.19877504e+00, -2.55008721e-03]
+            POS_2 = [-5.08497330e-01, -2.54640933e-01, 7.50035058e-02,  2.87002445e+00, -1.19890213e+0, -2.42054737e-03]
+
+            
+
             auto_record_running = False
             auto_record_request_stop = False
             auto_record_stage = 0
@@ -100,13 +105,15 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
             gripper_state = 0 # start gripper in open state
             object_is_cylinder = False
             iniital_starting_position = None
+            final_placing_position = POS_2
 
-            NEW_SAMPLE_TOL = 0.01       # 10mm
-            DEVIATION_VAL = 0.005       # 5mm
+            NEW_SAMPLE_TOL = 0.07       # 7 cm
+            DEVIATION_VAL = 0.005       # 5 mm
             FINAL_POS_VARIATION = 0.03
             POS_REACHED_TOL = 0.001     # 1mm 
             ROT_REACHED_TOL = 0.001   
             RE_CENTER_DIST = 0.007 / 2  # 3.5mm
+            
 
             while not stop:
                 try:
@@ -135,7 +142,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                             key_counter.clear()
                             is_recording = True
                             print('Recording!')
-                        elif key_stroke == Key.f3 and not is_recording:
+                        elif key_stroke == Key.f3 and not auto_record_running:
                             # Stop recording
                             env.end_episode()
                             key_counter.clear()
@@ -194,14 +201,16 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
 
 
 
-                        if auto_record_stage == 1:  # sample new final position and carry it out
+                        if auto_record_stage == 1:  # sample new starting position and carry it out
                                 if np.linalg.norm(current_pose[:3] - target_pose[:3]) < POS_REACHED_TOL:
-                                    if np.any(iniital_starting_position) == None:
-                                        iniital_starting_position = current_pose.copy()
+                                    # if np.any(iniital_starting_position) == None:
+                                    #     iniital_starting_position = current_pose.copy()
                                     while True:
                                         auto_record_target = current_pose.copy()
-                                        auto_record_target[0] = iniital_starting_position[0] + np.random.uniform(-FINAL_POS_VARIATION, FINAL_POS_VARIATION)
-                                        auto_record_target[1] = iniital_starting_position[1] + np.random.uniform(-FINAL_POS_VARIATION, FINAL_POS_VARIATION)
+                                        auto_record_target[:2] = sample_random_target()
+                                        # auto_record_target = current_pose.copy()
+                                        # auto_record_target[0] = iniital_starting_position[0] + np.random.uniform(-FINAL_POS_VARIATION, FINAL_POS_VARIATION)
+                                        # auto_record_target[1] = iniital_starting_position[1] + np.random.uniform(-FINAL_POS_VARIATION, FINAL_POS_VARIATION)
                                         # only advance stage if the target is valid
                                         if (np.abs(auto_record_target[0] - current_pose[0]) >= NEW_SAMPLE_TOL and
                                             np.abs(auto_record_target[1] - current_pose[1]) >= NEW_SAMPLE_TOL): # TOL = 0.01
@@ -226,7 +235,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                                 auto_record_target = current_pose.copy()
                                 auto_record_target[2] = 0.075 # target should be below when object touches base
                                 if not object_is_cylinder:
-                                    object_rotation = np.random.uniform(-80, 80)
+                                    object_rotation = np.random.uniform(-45, 45) # limited to only 45 since block is symmetric
                                     object_rotated_pose = current_pose.copy()
 
                                     object_rotated_pose[3:] = st.Rotation.from_rotvec(object_rotated_pose[3:]).as_euler('xyz') # convert to euler
@@ -242,19 +251,19 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                                 if not object_is_cylinder:
                                     target_pose[3:] = object_rotated_pose[3:] 
 
-                                print(f"Entering stage {auto_record_stage}: Move to new target position")
+                                print(f"Entering stage {auto_record_stage}: moving to starting position for next episode")
                             else:
                                 pass
                         
                         
-                        if auto_record_stage == 2.5: # move back downwards before opening gripper
+                        if auto_record_stage == 2.5: # move downwards to place block
                             if np.linalg.norm(current_pose - target_pose) < POS_REACHED_TOL: # sampled  position reached
                                 target_pose[2] = 0.075
                                 auto_record_stage = 3
 
                         
 
-                        if auto_record_stage == 3: # lifting to random height
+                        if auto_record_stage == 3: # open gripper and lift to random height
                             if np.linalg.norm(current_pose - target_pose) < POS_REACHED_TOL: # rotation done
                                 
                                 action_array[6] = 0 # open gripper when roation is done
@@ -269,14 +278,16 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                             else:
                                 pass # wait until robot eef is re-centered to insertion frame
 
-                        if auto_record_stage == 4: # move to starting position
+                        if auto_record_stage == 4: # move to starting position (only x,y part extracted)
                             if np.linalg.norm(current_pose[:3] - target_pose[:3]) < POS_REACHED_TOL: # target reached
                                 print(f"Stage {auto_record_stage}: Lifted robot eef")
                                 # now move to random new position
                                 auto_record_stage = 5
                                 target_pose = current_pose.copy()
-                                target_pose[0] += np.random.uniform(-0.05, 0.05)
-                                target_pose[1] += np.random.uniform(-0.05, 0.05)
+                                target_pose[:2] = FIXED_STARTING_POSITION[:2] # take (x,y) from fixed starting position
+                                # slihtly vary fixed starting position
+                                target_pose[0] += np.random.uniform(-DEVIATION_VAL, DEVIATION_VAL)
+                                target_pose[1] += np.random.uniform(-DEVIATION_VAL, DEVIATION_VAL)
                                 print(f"Entering stage {auto_record_stage}: Will now go to random starting position for next episode: {target_pose}")
 
                             else:
@@ -299,20 +310,18 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                                 target_pose[3:] = varied_initial_yaw_angle[3:] 
 
                                 print(f"Entering stage {auto_record_stage}: will start episode")
-                                timestamp = time.monotonic()
-                                print("3 seconds delay for adjsutment")
                             else:
                                 pass
                         elif auto_record_stage == 5 and object_is_cylinder:
                             if np.linalg.norm(current_pose[:3] - target_pose[:3]) < POS_REACHED_TOL: # target reached
                                 auto_record_stage = 6
-                                timestamp = time.monotonic()
-                                print("3 seconds delay for adjsutment")
+                                
+                                
 
 
 
 
-                        if auto_record_stage == 6 and time.monotonic() - timestamp >= 3: # move to starting devaited position
+                        if auto_record_stage == 6: # skipped
                             if np.linalg.norm(current_pose[3:] - target_pose[3:6]) < POS_REACHED_TOL: # target reached
                                 # target reached, start recording
                                 print(f"Stage {auto_record_stage}: Random starting position reached {target_pose}.")
@@ -381,13 +390,52 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                                 timestamp = time.monotonic()
                                 auto_record_stage = 11
 
-                        if auto_record_stage == 11: # time delay
+                        
+                        if auto_record_stage == 11 and time.monotonic() - timestamp >= 1: # wait then lift to horizontal moving height 
+                            if np.linalg.norm(current_pose - target_pose) < POS_REACHED_TOL: # rotation done
+                                print(f"Stage {auto_record_stage}: lifting to horizontal moving height")
+                                # target reached, move to next stage
+                                auto_record_stage = 12
+                                 
+                                target_pose[2] = 0.15 # lift the robot eef 15 mm
+                                print(f"Entering stage {auto_record_stage}: Will now lift the robot eef with target pose {target_pose}")
+                                
+                            else:
+                                pass # wait until robot eef is re-centered to insertion frame
+                        
+                        if auto_record_stage == 12: # move horizontally to final placing position
+                            if np.linalg.norm(current_pose[:3] - target_pose[:3]) < POS_REACHED_TOL:
+                                print(f"stage {auto_record_stage}: moving to final position.")
+                                target_pose[:2] = final_placing_position[:2] # only need x,y coordinates
+                                auto_record_stage = 13
+
+
+                        if auto_record_stage == 13: # rotate to final orientation
+                            if np.linalg.norm(current_pose[:3] - target_pose[:3]) < POS_REACHED_TOL:
+                                print(f"stage {auto_record_stage}: rotating to final orientation.")
+                                target_pose[3:] = final_placing_position[3:]
+                                auto_record_stage = 14
+                            
+
+                        if auto_record_stage == 14: # move downwards 
+                             if np.linalg.norm(current_pose[3:] - target_pose[3:]) < POS_REACHED_TOL:
+                                  print(f"stage {auto_record_stage}: moving downwards to place object.")
+                                  target_pose[2] = 0.075
+                                  auto_record_stage = 15
+                    
+
+                        if auto_record_stage == 15: # open gripper 
+                            if np.linalg.norm(current_pose[:3] - target_pose[:3]) < POS_REACHED_TOL:
+                                action_array[6] = 0
+                                auto_record_stage = 16
+                                timestamp = time.monotonic()
+
+                        if auto_record_stage == 16: # time delay
                             if time.monotonic() - timestamp >= 4.0:
                                 print(f"Stage {auto_record_stage}: Waited for 5 seconds, will now move to next episode")
 
-                                # Stop recording
+                               # Stop recording
                                 env.end_episode()
-                                key_counter.clear()
                                 is_recording = False
                                 print('Stopped.')
 
@@ -467,7 +515,7 @@ def main(output, robot_ip, vis_camera_idx, init_joints, frequency, command_laten
                     traceback.print_exc()
 
 
-def sample_random_target(limits_x=[-0.75, -0.55], limits_y=[-0.35, -0.15], limits_z=[0.08, 0.15]):
+def sample_random_target(limits_x=[-0.85, -0.3], limits_y=[-0.45, -0.08], limits_z=[0.08, 0.15]):
     """
     Sample a random target pose (x, y, z) within given limits.
     """
