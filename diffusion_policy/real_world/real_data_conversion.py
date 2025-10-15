@@ -6,9 +6,7 @@ import av
 import zarr
 import numcodecs
 import multiprocessing
-import cv2
 import concurrent.futures
-import threadpoolctl
 from tqdm import tqdm
 from diffusion_policy.common.replay_buffer import ReplayBuffer, get_optimal_chunks
 from diffusion_policy.common.cv2_util import get_image_transform
@@ -31,8 +29,7 @@ def real_data_to_replay_buffer(
         n_decoding_threads: int=multiprocessing.cpu_count(),
         n_encoding_threads: int=multiprocessing.cpu_count(),
         max_inflight_tasks: int=multiprocessing.cpu_count()*5,
-        verify_read: bool=True,
-        augmentation: bool=False
+        verify_read: bool=True
         ) -> ReplayBuffer:
     """
     It is recommended to use before calling this function
@@ -48,9 +45,6 @@ def real_data_to_replay_buffer(
             camera_0: (1280, 720)
     image_keys: ['camera_0', 'camera_1']
     """
-    if augmentation:
-        cv2.setNumThreads(0)
-        threadpoolctl.threadpool_limits(1)
     if out_store is None:
         out_store = zarr.MemoryStore()
     if n_decoding_threads <= 0:
@@ -177,11 +171,6 @@ def real_data_to_replay_buffer(
                             thread_type='FRAME',
                             thread_count=n_decoding_threads
                         )):
-                        if augmentation:
-                            frame = augment_image(frame,
-                                    brightness_range=(0.7, 1.3),
-                                    contrast_range=(0.7, 1.3),
-                                    gamma_range=(0.7, 1.5))
                         if len(futures) >= max_inflight_tasks:
                             # limit number of inflight tasks
                             completed, futures = concurrent.futures.wait(futures, 
@@ -202,35 +191,4 @@ def real_data_to_replay_buffer(
                     raise RuntimeError('Failed to encode image!')
             pbar.update(len(completed))
     return out_replay_buffer
-
-def augment_image(img, brightness_range=None, contrast_range=None, gamma_range=None):
-    if brightness_range is not None:
-        img = random_brightness(img, brightness_range)
-    if contrast_range is not None:
-        img = random_contrast(img, contrast_range)
-    if gamma_range is not None:
-        img = random_gamma(img, gamma_range)
-    return img
-
-
-def random_brightness(img: np.ndarray, alpha_range=(0.7, 1.3)) -> np.ndarray:
-    """Uniform brightness scaling."""
-    alpha = np.random.uniform(*alpha_range)
-    return np.clip(img.astype(np.float32) * alpha, 0, 255).astype(np.uint8)
-
-
-def random_contrast(img: np.ndarray, alpha_range=(0.7, 1.3)) -> np.ndarray:
-    """Contrast adjustment around mean intensity."""
-    alpha = np.random.uniform(*alpha_range)
-    mean = np.mean(img, axis=(0,1), keepdims=True)
-    return np.clip(mean + alpha * (img.astype(np.float32) - mean), 0, 255).astype(np.uint8)
-
-
-def random_gamma(img: np.ndarray, gamma_range=(0.7, 1.5)) -> np.ndarray:
-    """Gamma correction."""
-    gamma = np.random.uniform(*gamma_range)
-    inv_gamma = 1.0 / gamma
-    lut = (np.linspace(0, 1, 256) ** inv_gamma * 255).astype(np.uint8)
-    return cv2.LUT(img, lut)
-
 
