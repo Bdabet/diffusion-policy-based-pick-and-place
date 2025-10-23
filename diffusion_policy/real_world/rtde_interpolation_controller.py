@@ -105,7 +105,8 @@ class RTDEInterpolationController(mp.Process):
             'duration': 0.0,
             'target_time': 0.0,
             'joints_angles' : np.zeros((6), dtype=np.float64),
-            'gripper_status': 0
+            'gripper_status': 0,
+            'delay' : False
         }
         input_queue = SharedMemoryQueue.create_from_examples(
             shm_manager=shm_manager,
@@ -172,6 +173,10 @@ class RTDEInterpolationController(mp.Process):
         self.input_queue = input_queue
         self.ring_buffer = ring_buffer
         self.receive_keys = receive_keys
+
+        self.last_gripper_status = None
+        self.pending_gripper_close = None
+        self.gripper_close_time = None
     
     # ========= launch method ===========
     def start(self, wait=True):
@@ -209,15 +214,28 @@ class RTDEInterpolationController(mp.Process):
         self.stop()
 
     def gripper_command(self, status):
+        """
+        Queue gripper open immediately, or delay close by 1s.
+        Only acts when the command changes from the previous state.
+        """
+        # Send open immediately
+        if status == 1:
+            delay = True
+        else:
+            delay = False
         self.input_queue.put({
             'cmd': Command.GRIPPER.value,
             'target_pose': np.zeros(6),
             'duration': 0.0,
             'target_time': 0.0,
-            'joints_angles' : np.zeros(6),
-            'gripper_status': int(status)
+            'joints_angles': np.zeros(6),
+            'gripper_status': status,
+            'delay' : delay
         })
-    
+        if self.verbose:
+            print("[RTDEPositionalController] Gripper open sent immediately.")
+
+
     def joint_rotation(self, joint_angles):
         self.input_queue.put({
             'cmd': Command.rotation.value,
@@ -225,7 +243,8 @@ class RTDEInterpolationController(mp.Process):
             'duration': 0.0,
             'target_time': 0.0,
             'joints_angles' : joint_angles,
-            'gripper_status': 0
+            'gripper_status': 0,
+            'delay' : False
         })
         
 
@@ -245,7 +264,8 @@ class RTDEInterpolationController(mp.Process):
             'duration': duration,
             'target_time': 0.0,
             'joints_angles' : np.zeros(6),
-            'gripper_status': 0
+            'gripper_status': 0,
+            'delay' : False
         })
             
     def schedule_waypoint(self, pose, target_time):
@@ -257,7 +277,8 @@ class RTDEInterpolationController(mp.Process):
             'duration': 0.0,
             'target_time': target_time,
             'joints_angles' : np.zeros(6),
-            'gripper_status': 0
+            'gripper_status': 0,
+            'delay' : False
         })
 
     def get_state(self, k=None, out=None):
@@ -330,22 +351,9 @@ class RTDEInterpolationController(mp.Process):
                     dt, 
                     self.lookahead_time, 
                     self.gain)
+
                 
 
-                # rtde_c.servoStop()
-                # time.sleep(0.01)
-
-                # if first_rot_received:
-                #     assert rtde_c.servoJ(target_joint_angles,
-                #             vel, acc, # dummy, not used by ur5
-                #             dt, 
-                #             self.lookahead_time, 
-                #             self.gain)
-                    
-                
-                    
-                
-                
                 # update robot state
                 state = dict()
                 for key in self.receive_keys:
@@ -423,9 +431,30 @@ class RTDEInterpolationController(mp.Process):
                         )
                         last_waypoint_time = target_time
                     elif cmd == Command.GRIPPER.value:
-                        status = bool(commands['gripper_status'][i])
-                        rtde_io.setToolDigitalOut(1, not status)
-                        rtde_io.setToolDigitalOut(0,   status)
+                        status = bool(command['gripper_status'])
+
+                        if status:  # 1 = close
+                            if bool(command['delay']):
+                                if status != self.last_gripper_status:
+                                    # Schedule delayed close
+                                    self.pending_gripper_close = True
+                                    self.gripper_close_time = time.monotonic() + 0
+                                    if self.verbose:
+                                        print("[RTDEPositionalController] Gripper close scheduled in 1s.")
+                            else:
+                                # close immediately
+                                rtde_io.setToolDigitalOut(1, not status)
+                                rtde_io.setToolDigitalOut(0, status)  
+                        else:
+                            # Open immediately
+                            rtde_io.setToolDigitalOut(1, not status)
+                            rtde_io.setToolDigitalOut(0, status)
+                            if self.verbose:
+                                print("[RTDEPositionalController] Gripper open sent immediately.")
+                            
+                        # Update last status only when a change actually happens
+                        self.last_gripper_status = status
+
                     elif cmd == Command.rotation.value:
                         
                         target_joint_angles = np.array(command['joints_angles'])
@@ -440,6 +469,25 @@ class RTDEInterpolationController(mp.Process):
                     else:
                         keep_running = False
                         break
+                # Check for pending delayed gripper close
+                if self.pending_gripper_close is not None:
+                    if self.pending_gripper_close:
+                        # print("gripper close time", self.gripper_close_time)
+                        if time.monotonic() >= self.gripper_close_time:
+                            self.input_queue.put({
+                                'cmd': Command.GRIPPER.value,
+                                'target_pose': np.zeros(6),
+                                'duration': 0.0,
+                                'target_time': 0.0,
+                                'joints_angles': np.zeros(6),
+                                'gripper_status': int(True),
+                                'delay' : False
+                            })
+                            self.pending_gripper_close = False
+                            self.gripper_close_time = None
+                            if self.verbose:
+                                print("[RTDEPositionalController] Gripper close command sent (after 1s delay).")
+
 
                 # regulate frequency
                 rtde_c.waitPeriod(t_start)
