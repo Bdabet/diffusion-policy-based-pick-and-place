@@ -66,7 +66,21 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
             lastest_ckpt_path = self.get_checkpoint_path()
             if lastest_ckpt_path.is_file():
                 print(f"Resuming from checkpoint {lastest_ckpt_path}")
-                self.load_checkpoint(path=lastest_ckpt_path)
+
+                exclude = []
+                exclude_pickles = []
+                if cfg.training.reset_state:
+                    exclude += ['global_step', 'epoch']
+                    exclude_pickles += ['global_step', 'epoch']
+                if cfg.training.reset_optimizer:
+                    exclude += ['optimizer']
+
+                self.load_checkpoint(
+                    path=lastest_ckpt_path, 
+                    exclude_keys=exclude,
+                    include_keys=[k for k in self.include_keys if k not in exclude_pickles])  # <- important
+
+
 
         # configure dataset
         dataset: BaseImageDataset
@@ -91,10 +105,10 @@ class TrainDiffusionUnetImageWorkspace(BaseWorkspace):
             num_training_steps=(
                 len(train_dataloader) * cfg.training.num_epochs) \
                     // cfg.training.gradient_accumulate_every,
-            # pytorch assumes stepping LRScheduler every epoch
-            # however huggingface diffusers steps it every batch
-            last_epoch=self.global_step-1
+            # start scheduler fresh if resetting state
+            last_epoch=-1 if (cfg.training.reset_state or cfg.training.reset_optimizer) else self.global_step-1
         )
+
 
         # configure ema
         ema: EMAModel = None
