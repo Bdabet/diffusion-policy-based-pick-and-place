@@ -64,8 +64,17 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
         if cfg.training.resume:
             lastest_ckpt_path = self.get_checkpoint_path()
             if lastest_ckpt_path.is_file():
-                print(f"Resuming from checkpoint {lastest_ckpt_path}")
-                self.load_checkpoint(path=lastest_ckpt_path)
+                print(f"Loading pretrained weights from {lastest_ckpt_path}")
+
+                exclude = []
+                exclude_pickles = []
+                if cfg.training.reset_state:
+                    exclude += ['global_step', 'epoch']
+                    exclude_pickles += ['global_step', 'epoch']
+                if cfg.training.reset_optimizer:
+                    exclude += ['optimizer']
+
+                self.load_checkpoint(path=lastest_ckpt_path, exclude_keys=exclude, include_keys=[k for k in self.include_keys if k not in exclude_pickles] )
 
         # configure dataset
         dataset: BaseImageDataset
@@ -92,7 +101,7 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
                     // cfg.training.gradient_accumulate_every,
             # pytorch assumes stepping LRScheduler every epoch
             # however huggingface diffusers steps it every batch
-            last_epoch=self.global_step-1
+            last_epoch=-1 if cfg.training.reset_state or cfg.training.reset_optimizer else self.global_step-1
         )
 
         # configure ema
@@ -109,6 +118,9 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
             output_dir=self.output_dir)
         assert isinstance(env_runner, BaseImageRunner)
 
+         # set wandb API key for login
+        wandb.login(key = "64db7fbddb62aa9b361bac0b2415a533659da080")
+
         # configure logging
         wandb_run = wandb.init(
             dir=str(self.output_dir),
@@ -118,7 +130,8 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
         wandb.config.update(
             {
                 "output_dir": self.output_dir,
-            }
+            }, 
+             allow_val_change=True,    
         )
 
         # configure checkpoint
@@ -136,6 +149,7 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
         
         # save batch for sampling
         train_sampling_batch = None
+        prev_ckpt_path = None
 
         if cfg.training.debug:
             cfg.training.num_epochs = 2
@@ -252,7 +266,21 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
                         del pred_action
                         del mse
                 
-                # checkpoint
+                # ========= checkpoint management ==========
+
+                # Save epoch-specific checkpoint
+                current_epoch_tag = f"epoch_{self.epoch:04d}"
+                prev_epoch_tag = f"epoch_{self.epoch - 1:04d}"
+
+                # Save current epoch checkpoint
+                self.save_checkpoint(tag=current_epoch_tag, use_thread=False)
+
+                # Delete previous epoch checkpoint if it exists
+                prev_ckpt_path = pathlib.Path(self.output_dir).joinpath('checkpoints', f'{prev_epoch_tag}.ckpt')
+                if prev_ckpt_path.exists():
+                    prev_ckpt_path.unlink()
+
+                # interval-based checkpointing
                 if (self.epoch % cfg.training.checkpoint_every) == 0:
                     # checkpointing
                     if cfg.checkpoint.save_last_ckpt:
@@ -273,6 +301,8 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
 
                     if topk_ckpt_path is not None:
                         self.save_checkpoint(path=topk_ckpt_path)
+
+                        
                 # ========= eval end for this epoch ==========
                 policy.train()
 
