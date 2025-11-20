@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - task: pick_and_place_text_conditioned_
+  - task: pick_and_place_text_conditioned_yaw
 
 name: train_diffusion_unet_image
 _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
@@ -121,11 +121,13 @@ training:
   max_val_steps: null
   # misc
   tqdm_interval_sec: 1.0
+  reset_state: True
+  reset_optimizer: False
 
 logging:
-  project: diffusion_policy_pick_place_text_cond_2_cam
+  project: diffusion_policy_pick_place_cond_rerun
   resume: True
-  mode: offline
+  mode: online
   name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
   tags: ["${name}", "${task_name}", "${exp_name}"]
   id: null
