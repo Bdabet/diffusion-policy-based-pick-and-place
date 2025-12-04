@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - task: pick_and_place_image_conditioned
+  - task: pick_and_place_image_conditioned_yaw
 
 name: train_diffusion_unet_image
 _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
@@ -17,6 +17,7 @@ dataset_obs_steps: ${n_obs_steps}
 past_action_visible: False
 keypoint_visible_rate: 1.0
 obs_as_global_cond: True
+weighted_loss: ${task.weighted_loss}
 
 policy:
   _target_: diffusion_policy.policy.diffusion_unet_image_policy.DiffusionUnetImagePolicy
@@ -61,6 +62,7 @@ policy:
   kernel_size: 5
   n_groups: 8
   cond_predict_scale: True
+  weighted_loss: ${weighted_loss}
 
   # scheduler.step params
   # predict_epsilon: True
@@ -74,15 +76,15 @@ ema:
   max_value: 0.9999
 
 dataloader:
-  batch_size: 64
-  num_workers: 1
+  batch_size: 32
+  num_workers: 4
   shuffle: True
   pin_memory: True
   persistent_workers: True
 
 val_dataloader:
-  batch_size: 64
-  num_workers: 1
+  batch_size: 32
+  num_workers: 4
   shuffle: False
   pin_memory: True
   persistent_workers: True
@@ -102,7 +104,7 @@ training:
   # optimization
   lr_scheduler: cosine
   lr_warmup_steps: 500
-  num_epochs: 1000
+  num_epochs: 1500
   gradient_accumulate_every: 1
   # EMA destroys performance when used with BatchNorm
   # replace BatchNorm with GroupNorm.
@@ -111,7 +113,7 @@ training:
   # training loop control
   # in epochs
   rollout_every: 50
-  checkpoint_every: 50
+  checkpoint_every: 100
   val_every: 1
   sample_every: 5
   # steps per epoch
@@ -119,14 +121,16 @@ training:
   max_val_steps: null
   # misc
   tqdm_interval_sec: 1.0
+  reset_state: False
+  reset_optimizer: False
 
 logging:
-  project: diffusion_policy_debug
+  project: diffusion_policy_pick_place_image_cond
   resume: True
   mode: online
   name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
   tags: ["${name}", "${task_name}", "${exp_name}"]
-  id: 5njsk3g4
+  id: null
   group: null
 
 checkpoint:

@@ -6,21 +6,21 @@ dataset_path: data/pusht_real/real_pusht_20230105
 shape_meta: &shape_meta
   # acceptable types: rgb, low_dim
   obs:
-    camera_0:
-      shape: ${task.image_shape}
-      type: rgb
+    # camera_0:
+    #   shape: ${task.image_shape}
+    #   type: rgb
     camera_1:
       shape: ${task.image_shape}
       type: rgb
     camera_2:
       shape: ${task.image_shape}
       type: rgb
-    camera_0_last_frame:
-      shape: ${task.image_shape}
-      type: rgb
-    # camera_1_last_frame:
+    # camera_0_last_frame:
     #   shape: ${task.image_shape}
     #   type: rgb
+    camera_1_last_frame:
+      shape: ${task.image_shape}
+      type: rgb
     # camera_2_last_frame:
     #   shape: ${task.image_shape}
     #   type: rgb
