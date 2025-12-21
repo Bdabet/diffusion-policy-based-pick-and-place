@@ -1,12 +1,6 @@
 """
 ROBOT SPEED: 50% to make it smoother
 
-Usage:
-- go into directory /workspace/diffusion_policy
-- then execute `python3 demo_real_robot.py -o /workspace/data/insertion_data_v2 --robot_ip 134.28.40.74`
-- if you want to initalize the joints for the insertion task: 
-`python3 demo_real_robot.py -o /workspace/data/insertion_data_v2 --robot_ip 134.28.40.74 --init_joints`  (please note that init_joint is a flag!)
-
 Robot movement:
 - left joystick controls robot EEF position in xy plane.
 - right bumper/trigger controls robot EEF position in z axis.
@@ -14,10 +8,20 @@ Robot movement:
 
 """
 
-# %%
+
+import sys
+import os
+
+# Get absolute path of the parent directory
+parent_dir = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..")
+)
+
+# Add parent directory to Python path
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
 
-# %%
 import time
 from multiprocessing.managers import SharedMemoryManager
 import click
