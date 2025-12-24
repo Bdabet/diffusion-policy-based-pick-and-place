@@ -15,6 +15,19 @@ The code has been adapted to support:
 
 ## Results
 
+### Example Episodes: Experiment 4
+
+<p align="center">
+  <img src="media\sucess_sample.gif" width="340">
+  <img src="media\failure_sample.gif" width="340">
+</p>
+
+<p align="center">
+  <em>Left: Successful multi-object pick-and-place episode. Right: Failure due to off-centered grasp or premature gripper closure.</em>
+</p>
+
+
+
 The adapted diffusion policy achieves reliable real-world performance across a range of UR10e pick-and-place tasks, including multi-object and in-box scenarios. Policies are consistently selected at the earliest low-loss checkpoint to avoid overfitting, which often degrades success rates at later epochs.
 
 ### Main task performance
@@ -87,17 +100,6 @@ Generalization to unseen green rectangular and semicircular blocks reaches **77.
 Adding a fourth conditioned goal via fine-tuning yields **81.90%** overall success, with the new goal reaching **82.6%**. Training time is reduced from approximately 42 hours to 16 hours.  
 **Takeaway:** Fine-tuning enables efficient adaptation with limited forgetting.
 
-
-### Example Episodes: Experiment 4
-
-<p align="center">
-  <img src="media\sucess_sample.gif" width="340">
-  <img src="media\failure_sample.gif" width="340">
-</p>
-
-<p align="center">
-  <em>Left: Successful multi-object pick-and-place episode. Right: Failure due to off-centered grasp or premature gripper closure.</em>
-</p>
 
 
 ## Citation
