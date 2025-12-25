@@ -33,10 +33,8 @@ import pathlib
 import skvideo.io
 from omegaconf import OmegaConf
 import scipy.spatial.transform as st
-#from diffusion_policy.real_world.real_env import RealEnv
 from diffusion_policy.real_world.real_env_gripper import RealEnv
-# from diffusion_policy.real_world.spacemouse_shared_memory_modified import Spacemouse
-from diffusion_policy.real_world.xbox_shared_memory import Spacemouse
+from diffusion_policy.real_world.xbox_shared_memory import XboxController
 from diffusion_policy.common.precise_sleep import precise_wait
 from diffusion_policy.real_world.real_inference_util import (
     get_real_obs_resolution, 

@@ -3,7 +3,6 @@ Usage:
 Training:
 python train.py --config-name=train_diffusion_lowdim_workspace
 
-#last keyboard domo video #89
 """
 
 import sys

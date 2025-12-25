@@ -6,7 +6,7 @@ from diffusion_policy.shared_memory.shared_memory_ring_buffer import SharedMemor
 from diffusion_policy.real_world.xbox_controller import XboxController
 
 
-class Spacemouse(mp.Process):
+class XboxController(mp.Process):
     def __init__(self, 
             shm_manager, 
             get_max_k=30, 
