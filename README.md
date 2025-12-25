@@ -11,6 +11,46 @@ The code has been adapted to support:
 - **Text-conditioned imitation learning**
 - **Image-conditioned imitation learning** 
 - **Multi-object sequential pick-and-place**
+
+## Repository Structure and Usage
+
+The overall code structure closely follows the original **Diffusion Policy** repository by Chi et al. Core training and evaluation logic is preserved, while selected scripts and configuration files have been extended to support gripper control and conditioning modalities (text and image).
+
+### Demonstration Collection
+
+- **`demo_real_robot_gripper.py`**  
+  Adapted from the original `demo_real_robot.py`.  
+  This script is used to collect real-world demonstrations on the UR10e robot equipped with the Zimmer gripper.
+
+  **Key extensions:**
+  - Explicit **gripper open/close control**
+  - Updated **real environment (`real_env`)** including the gripper
+  - Support for **text input** to condition demonstrations (e.g., goal descriptions)
+
+  Collected demonstrations are stored using the adjusted dataset format and are later used during policy training.
+
+---
+
+### Policy Evaluation
+
+- **`eval_real_robot_gripper.py`**  
+  Adapted from the original `eval_real_robot.py`.  
+  This script is used to evaluate trained policies on the real robot.
+
+  **Key extensions:**
+  - Evaluation with **gripper control**
+  - Support for **text-conditioned** and **image-conditioned** policies
+
+---
+
+### Training
+
+- **`train.py`**  
+  The original training entry point is retained.
+
+  Training is configured through **new task-specific configuration files**, which:
+  - Reference the **adjusted dataset scripts**
+  - Specify the **conditioning modality** (text or image)
  
 
 ## Results
