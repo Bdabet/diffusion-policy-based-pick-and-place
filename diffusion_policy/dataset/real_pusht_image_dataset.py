@@ -11,6 +11,8 @@ import cv2
 import json
 import hashlib
 import copy
+import threading
+import torchvision.transforms.functional as TF
 from diffusion_policy.common.pytorch_util import dict_apply
 from diffusion_policy.dataset.base_dataset import BaseImageDataset
 from diffusion_policy.model.common.normalizer import LinearNormalizer, SingleFieldLinearNormalizer
@@ -39,8 +41,25 @@ class RealPushTImageDataset(BaseImageDataset):
             val_ratio=0.0,
             max_train_episodes=None,
             delta_action=False,
+            enable_augmentation=False,
+            aug_brightness_range=(0.7, 1.3),
+            aug_contrast_range=(0.7, 1.3),
+            aug_gamma_range=(0.7, 1.5),
+            aug_probability=1.0
         ):
         assert os.path.isdir(dataset_path)
+
+        # Initialize augmenter if enabled
+        self.augmenter = None
+        if enable_augmentation:
+            self.augmenter = TorchvisionAugmenter(
+                brightness_range=aug_brightness_range,
+                contrast_range=aug_contrast_range,
+                gamma_range=aug_gamma_range,
+                probability=aug_probability
+            )
+            print(f"Image augmentation ENABLED (brightness={aug_brightness_range}, "
+                  f"contrast={aug_contrast_range}, gamma={aug_gamma_range})")
         
         replay_buffer = None
         if use_cache:
@@ -124,28 +143,7 @@ class RealPushTImageDataset(BaseImageDataset):
             val_ratio=val_ratio,
             seed=seed)
         
-        #adjustemts for limit
 
-        
-
-        # # Limit to episodes 0 to 89
-        # max_episode_idx = 89
-        # valid_episode_mask = np.zeros(replay_buffer.n_episodes, dtype=bool)
-        # valid_episode_mask[:max_episode_idx] = True
-
-        # # Now apply validation split **only on allowed episodes**
-        # val_mask = get_val_mask(
-        #     n_episodes=replay_buffer.n_episodes,
-        #     val_ratio=val_ratio,
-        #     seed=seed)
-
-        
-
-        # # Remove episodes >= 89 from validation and training
-        # val_mask = np.logical_and(val_mask, valid_episode_mask)
-        # train_mask = np.logical_and(~val_mask, valid_episode_mask)
-
-        #end of adjustemnts
 
         train_mask = ~val_mask
 
@@ -185,6 +183,7 @@ class RealPushTImageDataset(BaseImageDataset):
             episode_mask=self.val_mask
             )
         val_set.val_mask = ~self.val_mask
+        val_set.augmenter = None  # disable augmentation for val set
         return val_set
 
     def get_normalizer(self, **kwargs) -> LinearNormalizer:
@@ -222,10 +221,26 @@ class RealPushTImageDataset(BaseImageDataset):
 
         obs_dict = dict()
         for key in self.rgb_keys:
+            # Load images: shape (T, H, W, C) uint8
+            images = data[key][T_slice]
+
+            # ============================================================
+            # AUGMENTATION HAPPENS HERE - Per frame, thread-safe
+            # ============================================================
+            if self.augmenter is not None:
+                # Augment each frame in the sequence
+                augmented_images = []
+                for t in range(len(images)):
+                    img = images[t]  # (H, W, C) uint8
+                    img_aug = self.augmenter.augment_image(img)
+                    augmented_images.append(img_aug)
+                images = np.stack(augmented_images, axis=0)  # (T, H, W, C)
+            # ============================================================
+
             # move channel last to channel first
             # T,H,W,C
             # convert uint8 image to float32
-            obs_dict[key] = np.moveaxis(data[key][T_slice],-1,1
+            obs_dict[key] = np.moveaxis(images,-1,1
                 ).astype(np.float32) / 255.
             # T,C,H,W
             # save ram
@@ -301,6 +316,72 @@ def _get_replay_buffer(dataset_path, shape_meta, store):
             zarr_resize_index_last_dim(zarr_arr, idxs=[0,1])
 
     return replay_buffer
+
+
+class TorchvisionAugmenter:
+    """
+    Thread-safe augmentation using torchvision transforms.
+    """
+    def __init__(
+        self,
+        brightness_range=(0.7, 1.3),
+        contrast_range=(0.7, 1.3),
+        gamma_range=(0.7, 1.5),
+        probability=1.0
+    ):
+        self.brightness_range = brightness_range
+        self.contrast_range = contrast_range
+        self.gamma_range = gamma_range
+        self.probability = probability
+        self._thread_local = threading.local()
+
+    def _get_rng(self):
+        """Get thread-local random number generator."""
+        if not hasattr(self._thread_local, 'rng'):
+            worker_info = torch.utils.data.get_worker_info()
+            if worker_info is not None:
+                seed = worker_info.id + torch.initial_seed() % 2**32
+            else:
+                seed = threading.get_ident()
+            self._thread_local.rng = np.random.RandomState(seed)
+        return self._thread_local.rng
+
+    def augment_image(self, img: np.ndarray) -> np.ndarray:
+        """
+        Apply augmentations using torchvision (100% thread-safe).
+
+        Args:
+            img: (H, W, C) uint8 numpy array
+        Returns:
+            Augmented (H, W, C) uint8 numpy array
+        """
+        rng = self._get_rng()
+
+        # Random skip
+        if rng.random() > self.probability:
+            return img
+
+        # Convert to torch tensor (C, H, W) float32 [0, 1]
+        img_tensor = torch.from_numpy(img).permute(2, 0, 1).float() / 255.0
+
+        # Apply augmentations using torchvision
+        if self.brightness_range is not None:
+            brightness_factor = rng.uniform(*self.brightness_range)
+            img_tensor = TF.adjust_brightness(img_tensor, brightness_factor)
+
+        if self.contrast_range is not None:
+            contrast_factor = rng.uniform(*self.contrast_range)
+            img_tensor = TF.adjust_contrast(img_tensor, contrast_factor)
+
+        if self.gamma_range is not None:
+            gamma = rng.uniform(*self.gamma_range)
+            img_tensor = TF.adjust_gamma(img_tensor, gamma)
+
+        # Convert back to numpy uint8
+        img_tensor = torch.clamp(img_tensor * 255.0, 0, 255)
+        img_aug = img_tensor.permute(1, 2, 0).byte().numpy()
+
+        return img_aug
 
 
 def test():
